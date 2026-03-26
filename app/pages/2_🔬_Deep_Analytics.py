@@ -16,10 +16,10 @@ sys.path.insert(0, PROJECT_ROOT)
 st.set_page_config(page_title="Deep Analytics — ForecastIQ", page_icon="🔬", layout="wide")
 
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "app"))
-from streamlit_app import inject_css, load_app_data, render_sidebar, kpi_card, PLOTLY_LAYOUT
+from streamlit_app import inject_css, load_market_data, render_sidebar, kpi_card, PLOTLY_LAYOUT
 
 inject_css()
-df = load_app_data()
+df = load_market_data()
 filtered = render_sidebar(df)
 
 st.markdown('<p class="brand-header">🔬 Deep Analytics</p>', unsafe_allow_html=True)

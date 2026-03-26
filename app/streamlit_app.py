@@ -323,10 +323,15 @@ PLOTLY_LAYOUT = dict(
 )
 
 
-# ── Data Loading ───────────────────────────────────────────────────────────
+# ── Data Loading (v4: cache clear forced) ───────────────────────────────────
 @st.cache_data(ttl=600)
-def load_app_data():
+def load_market_data():
     path = os.path.join(PROJECT_ROOT, "data", "sales_data.parquet")
+    
+    # Check for corrupted/empty files left over from previous crashes
+    if os.path.exists(path) and os.path.getsize(path) == 0:
+        os.remove(path)
+        
     if not os.path.exists(path):
         with st.spinner("⚠️ Dataset not found. Generating a fresh AI dataset for deployment (this takes ~15 seconds)..."):
             sys.path.insert(0, os.path.join(PROJECT_ROOT, "src"))
@@ -340,12 +345,18 @@ def load_app_data():
             df["date"] = df["datetime"].dt.normalize()
             return df
     
-    df = pd.read_parquet(path)
-    # Ensure datetime is a proper Timestamp
-    df["datetime"] = pd.to_datetime(df["datetime"])
-    # Set date as a normalized timestamp at midnight (keeps the .dt accessor alive)
-    df["date"] = df["datetime"].dt.normalize()
-    return df
+    try:
+        df = pd.read_parquet(path)
+        # Ensure datetime is a proper Timestamp
+        df["datetime"] = pd.to_datetime(df["datetime"])
+        # Set date as a normalized timestamp at midnight (keeps the .dt accessor alive)
+        df["date"] = df["datetime"].dt.normalize()
+        return df
+    except Exception as e:
+        # If still corrupt, delete and retry recursively once
+        if os.path.exists(path): os.remove(path)
+        st.error(f"⚠️ Data error: {str(e)}. Refreshing page.")
+        return generate_dataset(start_date="2024-01-01", end_date="2024-12-31", output_path="")
 
 
 @st.cache_data(ttl=600)
@@ -489,7 +500,7 @@ def render_sidebar(df):
 # ── Main Entry Point (redirects to Overview) ──────────────────────────────
 def main():
     inject_css()
-    df = load_app_data()
+    df = load_market_data()
     filtered = render_sidebar(df)
 
     # Show a welcome message — all analytics live on the Overview page
