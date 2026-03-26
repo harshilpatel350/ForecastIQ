@@ -324,7 +324,7 @@ PLOTLY_LAYOUT = dict(
 
 # ── Data Loading ───────────────────────────────────────────────────────────
 @st.cache_data(ttl=600)
-def load_data():
+def load_app_data():
     path = os.path.join(PROJECT_ROOT, "data", "sales_data.parquet")
     if not os.path.exists(path):
         with st.spinner("⚠️ Dataset not found. Generating a fresh AI dataset for deployment (this takes ~15 seconds)..."):
@@ -336,12 +336,12 @@ def load_data():
             df.to_parquet(path)
             st.success("Dataset generated successfully!")
             df["datetime"] = pd.to_datetime(df["datetime"])
-            df["date"] = pd.to_datetime(df["date"])
+            df["date"] = df["datetime"].dt.date
             return df
     
     df = pd.read_parquet(path)
     df["datetime"] = pd.to_datetime(df["datetime"])
-    df["date"] = pd.to_datetime(df["date"])
+    df["date"] = df["datetime"].dt.date
     return df
 
 
@@ -396,8 +396,12 @@ def render_sidebar(df):
         st.markdown("---")
 
         # ── Date Range ──
-        min_date = df["date"].min().date()
-        max_date = df["date"].max().date()
+        min_date = df["date"].min() 
+        max_date = df["date"].max()
+        # Ensure they are valid date types for st.date_input
+        if hasattr(min_date, "date"): min_date = min_date.date()
+        if hasattr(max_date, "date"): max_date = max_date.date()
+
         date_range = st.date_input("📅 Date Range", [min_date, max_date], min_value=min_date, max_value=max_date)
 
         # ── City ──
@@ -473,7 +477,7 @@ def render_sidebar(df):
 # ── Main Entry Point (redirects to Overview) ──────────────────────────────
 def main():
     inject_css()
-    df = load_data()
+    df = load_app_data()
     filtered = render_sidebar(df)
 
     # Show a welcome message — all analytics live on the Overview page

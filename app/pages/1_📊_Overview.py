@@ -16,10 +16,10 @@ sys.path.insert(0, PROJECT_ROOT)
 st.set_page_config(page_title="Overview — ForecastIQ", page_icon="📊", layout="wide")
 
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "app"))
-from streamlit_app import inject_css, load_data, load_daily_data, render_sidebar, kpi_card, PLOTLY_LAYOUT
+from streamlit_app import inject_css, load_app_data, load_daily_data, render_sidebar, kpi_card, PLOTLY_LAYOUT
 
 inject_css()
-df = load_data()
+df = load_app_data()
 filtered = render_sidebar(df)
 
 # ════════════════════════════════════════════════════════════════════════════
