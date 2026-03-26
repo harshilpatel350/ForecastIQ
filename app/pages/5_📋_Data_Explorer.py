@@ -1,7 +1,7 @@
 """
-Page 5: Data Explorer
-======================
-Interactive data table with advanced filters, search, column visibility, CSV export, and statistics.
+Page 5: Data Explorer (Auto-EDA)
+=================================
+Interactive data table with dynamic filters, search, and visibility toggles based on schema.
 """
 import streamlit as st
 import pandas as pd
@@ -19,10 +19,15 @@ from streamlit_app import inject_css, get_active_dataset, render_sidebar, kpi_ca
 inject_css()
 df = get_active_dataset()
 filtered = render_sidebar(df)
-cols = filtered.columns.tolist()
+
+# Retrieve schema
+schema = st.session_state.get("schema", {"date_col": None, "numeric_cols": [], "categorical_cols": []})
+num_cols = schema["numeric_cols"]
+cat_cols = schema["categorical_cols"]
+date_col = schema["date_col"]
 
 st.markdown('<p class="brand-header">📋 Data Explorer</p>', unsafe_allow_html=True)
-st.markdown('<p class="brand-subtitle">Browse, search, and export your complete dataset with advanced filtering</p>', unsafe_allow_html=True)
+st.markdown('<p class="brand-subtitle">Browse, search, and export your complete dynamic dataset</p>', unsafe_allow_html=True)
 
 # ── Data Quality KPIs ────────────────────────────────────────────────────
 missing_pct = filtered.isna().sum().sum() / (len(filtered) * len(filtered.columns)) * 100
@@ -35,74 +40,51 @@ with c2:
 with c3:
     kpi_card("Missing Data", f"{missing_pct:.2f}%", None, missing_pct < 1, "🔍")
 with c4:
-    if "customer_id" in cols:
-        kpi_card("Unique Customers", f"{filtered['customer_id'].nunique():,}", icon="👥")
-    else:
-        kpi_card("Numeric Cols", f"{len(filtered.select_dtypes(include=[np.number]).columns)}", icon="🔢")
+    kpi_card("Numeric Cols", f"{len(num_cols)}", icon="🔢")
 with c5:
-    if "date" in cols:
-        d_min = pd.to_datetime(filtered['date'].min())
-        d_max = pd.to_datetime(filtered['date'].max())
+    if date_col and len(filtered) > 0:
+        d_min = pd.to_datetime(filtered[date_col].min())
+        d_max = pd.to_datetime(filtered[date_col].max())
         date_span = f"{d_min.strftime('%b %Y')} — {d_max.strftime('%b %Y')}"
         kpi_card("Date Span", date_span, icon="📅")
     else:
-        kpi_card("Dtypes", f"{filtered.dtypes.nunique()}", icon="📊")
+        kpi_card("Categories", f"{len(cat_cols)}", icon="📊")
 
 st.markdown("")
 
-# ── Advanced Filters ─────────────────────────────────────────────────────
+# ── Dynamic Advanced Filters ─────────────────────────────────────────────
+view_df = filtered.copy()
+
 with st.expander("🔧 Advanced Column Filters", expanded=False):
-    filter_cols = st.columns(3)
+    # Row 1: Top 3 categorical filters
+    if len(cat_cols) > 0:
+        filter_cols = st.columns(min(len(cat_cols), 3))
+        for i, col in enumerate(cat_cols[:3]):
+            with filter_cols[i]:
+                selected = st.multiselect(f"🏷️ {col.replace('_', ' ').title()}",
+                    sorted(filtered[col].dropna().unique().tolist()),
+                    default=None, key=f"explorer_cat_{col}")
+                if selected:
+                    view_df = view_df[view_df[col].isin(selected)]
 
-    view_df = filtered.copy()
-
-    with filter_cols[0]:
-        if "restaurant" in cols:
-            selected_restaurants = st.multiselect("🏪 Restaurant",
-                sorted(filtered["restaurant"].unique().tolist()),
-                default=None, key="explorer_rest")
-            if selected_restaurants:
-                view_df = view_df[view_df["restaurant"].isin(selected_restaurants)]
-
-    with filter_cols[1]:
-        if "product" in cols:
-            selected_products = st.multiselect("🍕 Product",
-                sorted(filtered["product"].unique().tolist()),
-                default=None, key="explorer_prod")
-            if selected_products:
-                view_df = view_df[view_df["product"].isin(selected_products)]
-
-    with filter_cols[2]:
-        if "order_type" in cols:
-            order_types = st.multiselect("🚗 Order Type",
-                sorted(filtered["order_type"].unique().tolist()),
-                default=None, key="explorer_ot")
-            if order_types:
-                view_df = view_df[view_df["order_type"].isin(order_types)]
-
-    filter_cols2 = st.columns(3)
-    with filter_cols2[0]:
-        if "total_amount" in cols:
-            min_amount = st.number_input("Min Amount (₹)", min_value=0, value=0, key="min_amt")
-            if min_amount > 0:
-                view_df = view_df[view_df["total_amount"] >= min_amount]
-    with filter_cols2[1]:
-        if "total_amount" in cols:
-            max_amount = st.number_input("Max Amount (₹)", min_value=0,
-                                         value=int(filtered["total_amount"].max()) + 1, key="max_amt")
-            if max_amount < filtered["total_amount"].max() + 1:
-                view_df = view_df[view_df["total_amount"] <= max_amount]
-    with filter_cols2[2]:
-        if "cancellation_flag" in cols:
-            cancel_filter = st.selectbox("Cancellation Status",
-                                         ["All", "Not Cancelled", "Cancelled Only"], key="cancel_f")
-            if cancel_filter == "Not Cancelled":
-                view_df = view_df[view_df["cancellation_flag"] == 0]
-            elif cancel_filter == "Cancelled Only":
-                view_df = view_df[view_df["cancellation_flag"] == 1]
-
-if "view_df" not in dir():
-    view_df = filtered.copy()
+    # Row 2: Top numeric min/max filters
+    if len(num_cols) > 0:
+        filter_cols2 = st.columns(min(len(num_cols) * 2, 4))
+        for i, col in enumerate(num_cols[:2]): 
+            min_col_idx = i * 2
+            max_col_idx = i * 2 + 1
+            col_name = col.replace('_', ' ').title()
+            
+            with filter_cols2[min_col_idx]:
+                col_min = float(filtered[col].min())
+                min_val = st.number_input(f"Min {col_name}", value=col_min, key=f"min_{col}")
+                if min_val > col_min:
+                    view_df = view_df[view_df[col] >= min_val]
+            with filter_cols2[max_col_idx]:
+                col_max = float(filtered[col].max())
+                max_val = st.number_input(f"Max {col_name}", value=col_max, key=f"max_{col}")
+                if max_val < col_max:
+                    view_df = view_df[view_df[col] <= max_val]
 
 # ── Search ───────────────────────────────────────────────────────────────
 search_term = st.text_input("🔍 Full-text search across all columns",
@@ -113,13 +95,16 @@ if search_term:
     ).any(axis=1)
     view_df = view_df[mask]
 
-# ── Column Visibility ────────────────────────────────────────────────────
+# ── Dynamic Column Visibility ────────────────────────────────────────────
 all_cols = view_df.columns.tolist()
-# Prefer showing common useful columns
-preferred = ["order_id", "datetime", "date", "city", "restaurant", "product", "category",
-             "quantity", "total_amount", "payment_method", "order_type", "rating",
-             "weather", "cancellation_flag"]
-default_cols = [c for c in preferred if c in all_cols]
+# Dynamic defaults based on schema
+default_cols = []
+if date_col: default_cols.append(date_col)
+default_cols.extend(cat_cols[:4])
+default_cols.extend(num_cols[:4])
+# Only keep the ones that exist
+default_cols = [c for c in default_cols if c in all_cols]
+
 if not default_cols:
     default_cols = all_cols[:10]
 
@@ -163,9 +148,9 @@ st.markdown('<div class="section-title">📊 Statistical Summary</div>', unsafe_
 st.markdown('<p class="section-subtitle">Descriptive statistics for all numeric columns in the current view</p>', unsafe_allow_html=True)
 
 with st.expander("View statistics", expanded=False):
-    num_cols = view_df.select_dtypes(include=[np.number]).columns.tolist()
-    if num_cols:
-        st.dataframe(view_df[num_cols].describe().T.style.format("{:.2f}"),
+    view_num_cols = view_df.select_dtypes(include=[np.number]).columns.tolist()
+    if view_num_cols:
+        st.dataframe(view_df[view_num_cols].describe().T.style.format("{:.2f}"),
                       use_container_width=True)
     else:
-        st.info("No numeric columns in the current selection.")
+        st.info("No numeric columns in the current dataset.")

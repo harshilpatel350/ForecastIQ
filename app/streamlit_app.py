@@ -450,6 +450,28 @@ def _normalize_uploaded_df(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def extract_schema(df: pd.DataFrame) -> dict:
+    """Analyze the dataframe and categorize columns for dynamic UI generation."""
+    schema = {"date_col": None, "numeric_cols": [], "categorical_cols": []}
+    
+    for col in df.columns:
+        if pd.api.types.is_datetime64_any_dtype(df[col]):
+            if not schema["date_col"] and col != "datetime":
+                schema["date_col"] = col
+        elif pd.api.types.is_numeric_dtype(df[col]):
+            # Keep anything that looks like a metric, exclude IDs/metadata
+            if not any(x in col.lower() for x in ["id", "zip", "latitude", "longitude", "year", "month", "day", "hour", "weekday"]):
+                schema["numeric_cols"].append(col)
+        elif df[col].dtype == "object" or df[col].dtype.name == "category":
+            if col.lower() != "datetime" and df[col].nunique() < 50:
+                schema["categorical_cols"].append(col)
+                
+    if not schema["date_col"] and "date" in df.columns: schema["date_col"] = "date"
+    if not schema["date_col"] and "datetime" in df.columns: schema["date_col"] = "datetime"
+                
+    return schema
+
+
 def get_active_dataset() -> pd.DataFrame:
     """Return the uploaded dataset if available, otherwise the default."""
     if "uploaded_df" in st.session_state and st.session_state["uploaded_df"] is not None:
@@ -477,7 +499,8 @@ def kpi_card(title: str, value: str, delta: str = None, delta_positive: bool = T
 
 # ── Sidebar ────────────────────────────────────────────────────────────────
 def render_sidebar(df):
-    cols = df.columns.tolist()
+    schema = extract_schema(df)
+    st.session_state["schema"] = schema
 
     with st.sidebar:
         # Brand header
@@ -512,94 +535,61 @@ def render_sidebar(df):
             if st.button("❌ Clear Upload & Use Default", key="clear_upload"):
                 st.session_state["uploaded_df"] = None
                 st.rerun()
-            # Refresh df to use uploaded data
             df = st.session_state["uploaded_df"]
-            cols = df.columns.tolist()
+            schema = extract_schema(df)
+            st.session_state["schema"] = schema
         else:
             st.caption("📦 Using **default dataset**")
 
         st.markdown("---")
 
-        # ── Date Range (only if 'date' column exists) ──
-        if "date" in cols:
+        # ── Date Range (dynamic) ──
+        date_range = []
+        if schema["date_col"]:
+            d_col = schema["date_col"]
             try:
-                raw_min = df["date"].min()
-                raw_max = df["date"].max()
+                raw_min = df[d_col].min()
+                raw_max = df[d_col].max()
                 min_date = pd.to_datetime(raw_min).date()
                 max_date = pd.to_datetime(raw_max).date()
             except:
                 min_date = datetime.now().date() - timedelta(days=30)
                 max_date = datetime.now().date()
             date_range = st.date_input("📅 Date Range", [min_date, max_date], min_value=min_date, max_value=max_date)
-        else:
-            date_range = []
 
-        # ── City (adaptive) ──
-        selected_cities = []
-        if "city" in cols:
-            cities = sorted(df["city"].unique().tolist())
-            selected_cities = st.multiselect("🏙️ City", cities, default=cities, key="filter_city")
+        # ── Dynamic Categorical Filters ──
+        active_filters = {}
+        cat_cols = schema["categorical_cols"]
+        
+        # Show top 2 filters directly, put the rest in an expander
+        visible_cats = cat_cols[:2]
+        hidden_cats = cat_cols[2:]
+        
+        for col in visible_cats:
+            items = sorted(df[col].dropna().unique().tolist())
+            display_name = col.replace('_', ' ').title()
+            active_filters[col] = st.multiselect(f"🏷️ {display_name}", items, default=items, key=f"filter_{col}")
+            
+        if hidden_cats:
+            with st.expander("🔽 More Filters", expanded=False):
+                for col in hidden_cats:
+                    items = sorted(df[col].dropna().unique().tolist())
+                    display_name = col.replace('_', ' ').title()
+                    active_filters[col] = st.multiselect(f"🏷️ {display_name}", items, default=items, key=f"filter_{col}")
 
-        # ── Category (adaptive) ──
-        selected_categories = []
-        if "category" in cols:
-            categories = sorted(df["category"].unique().tolist())
-            selected_categories = st.multiselect("🍽️ Category", categories, default=categories, key="filter_category")
-
-        # ── Apply base filters first to cascade ──
+        # ── Apply Filters ──
         filtered = df.copy()
-        if "date" in cols and len(date_range) == 2:
+        
+        if schema["date_col"] and len(date_range) == 2:
             start_dt = pd.to_datetime(date_range[0])
             end_dt = pd.to_datetime(date_range[1])
-            filtered = filtered[(filtered["date"] >= start_dt) & (filtered["date"] <= end_dt)]
-        if selected_cities and "city" in cols:
-            filtered = filtered[filtered["city"].isin(selected_cities)]
-        if selected_categories and "category" in cols:
-            filtered = filtered[filtered["category"].isin(selected_categories)]
-
-        # ── Cascaded Filters (only show what exists) ──
-        more_filters = []
-        if "restaurant" in cols: more_filters.append("restaurant")
-        if "product" in cols: more_filters.append("product")
-        if "order_type" in cols: more_filters.append("order_type")
-        if "payment_method" in cols: more_filters.append("payment_method")
-        if "weather" in cols: more_filters.append("weather")
-
-        selected_restaurants = selected_products = selected_order_types = selected_pay = selected_weather = []
-
-        if more_filters:
-            with st.expander("🔽 More Filters", expanded=False):
-                if "restaurant" in cols:
-                    avail_restaurants = sorted(filtered["restaurant"].unique().tolist())
-                    selected_restaurants = st.multiselect("🏪 Restaurant", avail_restaurants, default=avail_restaurants, key="filter_rest")
-
-                if "product" in cols:
-                    avail_products = sorted(filtered["product"].unique().tolist())
-                    selected_products = st.multiselect("🍕 Product", avail_products, default=avail_products, key="filter_prod")
-
-                if "order_type" in cols:
-                    order_types = sorted(filtered["order_type"].unique().tolist())
-                    selected_order_types = st.multiselect("🚗 Order Type", order_types, default=order_types, key="filter_ot")
-
-                if "payment_method" in cols:
-                    pay_methods = sorted(filtered["payment_method"].unique().tolist())
-                    selected_pay = st.multiselect("💳 Payment Method", pay_methods, default=pay_methods, key="filter_pay")
-
-                if "weather" in cols:
-                    weathers = sorted(filtered["weather"].unique().tolist())
-                    selected_weather = st.multiselect("🌦️ Weather", weathers, default=weathers, key="filter_weather")
-
-        # Apply remaining filters
-        if selected_restaurants and "restaurant" in cols:
-            filtered = filtered[filtered["restaurant"].isin(selected_restaurants)]
-        if selected_products and "product" in cols:
-            filtered = filtered[filtered["product"].isin(selected_products)]
-        if selected_order_types and "order_type" in cols:
-            filtered = filtered[filtered["order_type"].isin(selected_order_types)]
-        if selected_pay and "payment_method" in cols:
-            filtered = filtered[filtered["payment_method"].isin(selected_pay)]
-        if selected_weather and "weather" in cols:
-            filtered = filtered[filtered["weather"].isin(selected_weather)]
+            d_col = schema["date_col"]
+            filtered = filtered[(filtered[d_col].dt.normalize() >= start_dt) & 
+                                (filtered[d_col].dt.normalize() <= end_dt)]
+                                
+        for col, selected_items in active_filters.items():
+            if selected_items:
+                filtered = filtered[filtered[col].isin(selected_items)]
 
         st.markdown("---")
 
@@ -608,24 +598,27 @@ def render_sidebar(df):
         stat_cols_ui = st.columns(2)
         with stat_cols_ui[0]:
             st.caption(f"📦 **{len(filtered):,}** rows")
-            if "city" in cols:
-                st.caption(f"🏙️ **{filtered['city'].nunique()}** cities")
+            if len(cat_cols) > 0:
+                col1 = cat_cols[0]
+                st.caption(f"🏷️ **{filtered[col1].nunique()}** {col1.replace('_', ' ')}")
         with stat_cols_ui[1]:
-            if "product" in cols:
-                st.caption(f"🍕 **{filtered['product'].nunique()}** products")
-            if "date" in cols:
-                st.caption(f"📅 **{filtered['date'].nunique()}** days")
+            if len(cat_cols) > 1:
+                col2 = cat_cols[1]
+                st.caption(f"🏷️ **{filtered[col2].nunique()}** {col2.replace('_', ' ')}")
+            if schema["date_col"]:
+                st.caption(f"📅 **{filtered[schema['date_col']].nunique()}** days")
 
         st.markdown("---")
         st.markdown(
             '<div style="text-align:center;">'
-            '<span class="version-badge">v1.1.0</span>'
+            '<span class="version-badge">v2.0 Auto-EDA</span>'
             '</div>',
             unsafe_allow_html=True,
         )
 
     st.session_state["filtered_df"] = filtered
     return filtered
+
 
 
 # ── Main Entry Point (redirects to Overview) ──────────────────────────────
