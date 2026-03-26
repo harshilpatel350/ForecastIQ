@@ -348,52 +348,122 @@ PLOTLY_LAYOUT = dict(
 )
 
 
-# ── Data Loading (v4: cache clear forced) ───────────────────────────────────
-@st.cache_data(ttl=600)
-def load_market_data():
-    path = os.path.join(PROJECT_ROOT, "data", "sales_data.parquet")
-    
-    # Check for corrupted/empty files left over from previous crashes
-    if os.path.exists(path) and os.path.getsize(path) == 0:
-        os.remove(path)
-        
-    if not os.path.exists(path):
-        with st.spinner("⚠️ Dataset not found. Generating a fresh AI dataset for deployment (this takes ~15 seconds)..."):
-            sys.path.insert(0, os.path.join(PROJECT_ROOT, "src"))
-            from data_generation import generate_dataset
-            # Generate 1 year of data instead of 3 to keep it lightweight for cloud
-            df = generate_dataset(start_date="2024-01-01", end_date="2024-12-31", output_path="")
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            df.to_parquet(path)
-            st.success("Dataset generated successfully!")
-            df["datetime"] = pd.to_datetime(df["datetime"])
-            df["date"] = df["datetime"].dt.normalize()
-            return df
-    
+# ── Data Loading (Production: CSV-first, Parquet-cache) ────────────────────
+@st.cache_data(ttl=3600, show_spinner="📊 Loading sales data...")
+def load_market_data() -> pd.DataFrame:
+    """
+    Production-grade data loader for Streamlit Cloud.
+    Priority order:
+      1. Local Parquet cache (fast, persists across reruns on same container)
+      2. Committed CSV from repo (always available on Streamlit Cloud)
+      3. Graceful error with action hint
+    """
+    csv_path     = os.path.join(PROJECT_ROOT, "data", "sales_data.csv")
+    parquet_path = os.path.join(PROJECT_ROOT, "data", "sales_data.parquet")
+
+    # ── 1. Fast Parquet cache ──────────────────────────────────────────
+    if os.path.exists(parquet_path):
+        if os.path.getsize(parquet_path) == 0:
+            os.remove(parquet_path)  # delete corrupt empty file
+        else:
+            try:
+                df = pd.read_parquet(parquet_path)
+                df["datetime"] = pd.to_datetime(df["datetime"])
+                df["date"]     = df["datetime"].dt.normalize()
+                return df
+            except Exception:
+                os.remove(parquet_path)  # delete corrupt parquet and fall through
+
+    # ── 2. Load from committed CSV ─────────────────────────────────────
+    if not os.path.exists(csv_path):
+        st.error(
+            "❌ **Default dataset not found.**\n\n"
+            "Expected at `data/sales_data.csv` relative to the project root.\n"
+            "Please upload your own CSV using the sidebar."
+        )
+        st.stop()
+
     try:
-        df = pd.read_parquet(path)
-        # Ensure datetime is a proper Timestamp
-        df["datetime"] = pd.to_datetime(df["datetime"])
-        # Set date as a normalized timestamp at midnight (keeps the .dt accessor alive)
-        df["date"] = df["datetime"].dt.normalize()
-        return df
+        df = pd.read_csv(
+            csv_path,
+            dtype={
+                "order_id": str, "city": str, "restaurant": str,
+                "category": str, "product": str, "payment_method": str,
+                "order_type": str, "delivery_partner": str,
+                "customer_id": str, "weather": str, "inventory_status": str,
+            },
+            low_memory=False,
+        )
     except Exception as e:
-        # If still corrupt, delete and retry recursively once
-        if os.path.exists(path): os.remove(path)
-        st.error(f"⚠️ Data error: {str(e)}. Refreshing page.")
-        return generate_dataset(start_date="2024-01-01", end_date="2024-12-31", output_path="")
+        st.error(f"❌ Failed to read `sales_data.csv`: {e}")
+        st.stop()
+
+    # ── Type enforcement ───────────────────────────────────────────────
+    df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
+    df["date"]     = df["datetime"].dt.normalize()
+
+    for num_col in ["total_amount", "unit_price", "quantity", "discount_pct",
+                    "rating", "temperature", "preparation_time",
+                    "competitor_price_index", "demand_index",
+                    "cancellation_flag", "is_new_customer", "is_holiday",
+                    "holiday_multiplier", "hour", "weekday", "month",
+                    "year", "day_of_year"]:
+        if num_col in df.columns:
+            df[num_col] = pd.to_numeric(df[num_col], errors="coerce")
+
+    df = df.dropna(subset=["datetime"])  # drop rows with unparseable dates
+
+    # ── Cache as Parquet for next run ──────────────────────────────────
+    try:
+        os.makedirs(os.path.dirname(parquet_path), exist_ok=True)
+        df.to_parquet(parquet_path, index=False)
+    except Exception:
+        pass  # Non-critical; cloud containers may be read-only in data/
+
+    return df
 
 
-@st.cache_data(ttl=600)
-def load_daily_data(df):
-    daily = df.groupby("date").agg(
-        daily_revenue=("total_amount", "sum"),
-        daily_orders=("order_id", "count"),
-        avg_order_value=("total_amount", "mean"),
-        avg_rating=("rating", "mean"),
-        cancel_rate=("cancellation_flag", "mean"),
-    ).reset_index()
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_daily_data(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Aggregate filtered data to daily granularity.
+    Adapts to the columns available (works for custom uploaded datasets too).
+    """
+    agg_dict = {}
+
+    # Always aggregate a "count" column for order volume
+    if "order_id" in df.columns:
+        agg_dict["daily_orders"] = ("order_id", "count")
+    else:
+        df = df.copy()
+        df["_row"] = 1
+        agg_dict["daily_orders"] = ("_row", "count")
+
+    # Primary metric
+    if "total_amount" in df.columns:
+        agg_dict["daily_revenue"] = ("total_amount", "sum")
+        agg_dict["avg_order_value"] = ("total_amount", "mean")
+
+    # Optional quality metric
+    if "rating" in df.columns:
+        agg_dict["avg_rating"] = ("rating", "mean")
+
+    # Optional cancellation
+    if "cancellation_flag" in df.columns:
+        agg_dict["cancel_rate"] = ("cancellation_flag", "mean")
+
+    date_col = "date" if "date" in df.columns else (
+               "datetime" if "datetime" in df.columns else None)
+
+    if date_col is None:
+        # No date column available — return an empty daily frame
+        return pd.DataFrame(columns=["date", "daily_orders"])
+
+    daily = df.groupby(date_col).agg(**agg_dict).reset_index()
+    daily = daily.rename(columns={date_col: "date"})
+    daily = daily.sort_values("date")
     return daily
+
 
 
 def load_model_results():

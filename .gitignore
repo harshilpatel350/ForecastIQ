@@ -4,4 +4,12 @@ __pycache__/
 *.pyc
 .env
 .DS_Store
-data/*.csv
+
+# Data: commit the lean default CSV; ignore large/derived files
+data/sales_data.parquet
+data/*.tmp
+data/model_comparison.json
+
+# Local dev artifacts
+src/generate_lean_csv.py
+tmp_convert.py
