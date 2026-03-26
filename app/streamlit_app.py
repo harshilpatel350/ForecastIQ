@@ -7,6 +7,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import os, sys, json
+from datetime import datetime, timedelta
 import plotly.express as px
 import plotly.graph_objects as go
 
@@ -396,11 +397,18 @@ def render_sidebar(df):
         st.markdown("---")
 
         # ── Date Range ──
-        min_date = df["date"].min() 
-        max_date = df["date"].max()
-        # Ensure they are valid date types for st.date_input
-        if hasattr(min_date, "date"): min_date = min_date.date()
-        if hasattr(max_date, "date"): max_date = max_date.date()
+        # Defensive conversion to ensure we have actual date objects for the widget
+        try:
+            raw_min = df["date"].min()
+            raw_max = df["date"].max()
+            
+            # If they are strings or other types, force to Timestamp then to date
+            min_date = pd.to_datetime(raw_min).date()
+            max_date = pd.to_datetime(raw_max).date()
+        except:
+            # Fallback for unexpected data states
+            min_date = datetime.now().date() - timedelta(days=30)
+            max_date = datetime.now().date()
 
         date_range = st.date_input("📅 Date Range", [min_date, max_date], min_value=min_date, max_value=max_date)
 
