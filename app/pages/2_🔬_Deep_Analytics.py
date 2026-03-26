@@ -143,7 +143,7 @@ st.markdown('<div class="section-title">👥 Monthly Revenue by City</div>', uns
 st.markdown('<p class="section-subtitle">Track city-level revenue trends month-over-month</p>', unsafe_allow_html=True)
 
 filtered_c = filtered.copy()
-filtered_c["year_month"] = pd.to_datetime(filtered_c["date"]).dt.to_period("M").astype(str)
+filtered_c["year_month"] = pd.to_datetime(filtered_c["date"], errors="coerce").dt.to_period("M").astype(str)
 monthly = filtered_c.groupby(["year_month", "city"])["total_amount"].sum().reset_index()
 fig_cohort = px.line(monthly, x="year_month", y="total_amount", color="city",
                      labels={"total_amount": "Revenue (₹)", "year_month": "Month"},

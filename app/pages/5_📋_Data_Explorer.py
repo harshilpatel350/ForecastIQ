@@ -38,7 +38,9 @@ with c3:
 with c4:
     kpi_card("Unique Customers", f"{unique_cust:,}", icon="👥")
 with c5:
-    date_span = f"{filtered['date'].min().strftime('%b %Y')} — {filtered['date'].max().strftime('%b %Y')}"
+    d_min = pd.to_datetime(filtered['date'].min())
+    d_max = pd.to_datetime(filtered['date'].max())
+    date_span = f"{d_min.strftime('%b %Y')} — {d_max.strftime('%b %Y')}"
     kpi_card("Date Span", date_span, icon="📅")
 
 st.markdown("")

@@ -83,7 +83,8 @@ if len(daily) > 30:
     base_trend = np.mean(recent)
     trend_slope = (recent[-1] - recent[0]) / len(recent)
 
-    forecast_dates = pd.date_range(daily["date"].max() + pd.Timedelta(days=1), periods=forecast_days)
+    last_date = pd.to_datetime(daily["date"].max())
+    forecast_dates = pd.date_range(last_date + pd.Timedelta(days=1), periods=forecast_days)
     forecast_values = []
     for i in range(forecast_days):
         seasonal = recent[i % len(recent)] / base_trend

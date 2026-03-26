@@ -81,7 +81,7 @@ st.markdown('<p class="section-subtitle">Track weekly order and revenue trends f
 
 selected_product = st.selectbox("Select a product to analyze:", sorted(filtered["product"].unique().tolist()))
 prod_data = filtered[filtered["product"] == selected_product].copy()
-prod_data["week"] = pd.to_datetime(prod_data["date"]).dt.to_period("W").astype(str)
+prod_data["week"] = pd.to_datetime(prod_data["date"], errors="coerce").dt.to_period("W").astype(str)
 
 weekly_demand = prod_data.groupby("week").agg(
     orders=("order_id", "count"),
