@@ -149,6 +149,9 @@ def inject_css():
             text-transform: uppercase;
             letter-spacing: 0.8px;
             margin-bottom: 6px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .kpi-value {
             font-size: 26px;
@@ -156,6 +159,7 @@ def inject_css():
             color: #2d1b69;
             line-height: 1.2;
             letter-spacing: -0.5px;
+            white-space: nowrap;
         }
         .kpi-delta {
             font-size: 12px;
@@ -166,6 +170,7 @@ def inject_css():
             gap: 3px;
             padding: 2px 8px;
             border-radius: 20px;
+            white-space: nowrap;
         }
         .kpi-delta.positive {
             color: #7c3aed;
@@ -175,6 +180,25 @@ def inject_css():
             color: #dc2626;
             background: #fee2e2;
         }
+
+        /* ─── Responsive Adjustments ─── */
+        @media (max-width: 1200px) {
+            .kpi-card { padding: 16px 14px; }
+            .kpi-value { font-size: 20px; }
+            .kpi-title { font-size: 10px; }
+        }
+
+        @media (max-width: 992px) {
+            .kpi-card { padding: 12px 10px; }
+            .kpi-value { font-size: 15px; }
+            .kpi-title { font-size: 9px; letter-spacing: 0.5px; }
+            .kpi-icon { font-size: 16px; margin-bottom: 2px;}
+            .kpi-delta { font-size: 10px; padding: 2px 4px; }
+            
+            /* Constrain sidebar width on smaller laptops */
+            section[data-testid="stSidebar"] { min-width: 260px !important; max-width: 260px !important; }
+        }
+
 
         /* ─── Streamlit Native Widget Labels (replaces manual HTML labels) ─── */
         section[data-testid="stSidebar"] .stSelectbox label,
@@ -318,8 +342,9 @@ PLOTLY_LAYOUT = dict(
     plot_bgcolor="rgba(0,0,0,0)",
     paper_bgcolor="rgba(0,0,0,0)",
     font=dict(family="Inter, sans-serif", size=12, color="#2d1b69"),
-    margin=dict(l=20, r=20, t=40, b=20),
+    margin=dict(l=10, r=10, t=40, b=10),
     hoverlabel=dict(bgcolor="#ffffff", font_size=12, font_family="Inter", bordercolor="#ddd6fe"),
+    legend=dict(orientation="h", y=-0.2, x=0.5, xanchor="center")
 )
 
 
