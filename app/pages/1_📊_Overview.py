@@ -126,8 +126,7 @@ if date_col and len(num_cols) > 0:
                              name="7-Day Average", mode="lines",
                              line=dict(color="#6c63ff", width=2.5),
                              hovertemplate="%{y:,.0f}<extra>7d Avg</extra>"))
-    fig.update_layout(**PLOTLY_LAYOUT, height=370, hovermode="x unified",
-                      legend=dict(orientation="h", y=-0.2, x=0.5, xanchor="center"))
+    fig.update_layout(**PLOTLY_LAYOUT, height=370, hovermode="x unified")
     st.plotly_chart(fig, use_container_width=True)
 
 # ════════════════════════════════════════════════════════════════════════════

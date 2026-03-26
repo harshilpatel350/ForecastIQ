@@ -67,8 +67,7 @@ if models_available:
     fig_comp.add_trace(go.Bar(name="MAE", x=metrics_df["Model"].str.upper(), y=metrics_df["MAE"],
                               marker_color="#3b82f6", hovertemplate="%{y:.2f}<extra>MAE</extra>"))
     fig_comp.update_layout(**PLOTLY_LAYOUT, barmode="group", height=320,
-                           title="Model Metrics Comparison",
-                           legend=dict(orientation="h", y=1.05, x=0.5, xanchor="center"))
+                           title="Model Metrics Comparison")
     st.plotly_chart(fig_comp, use_container_width=True)
 else:
     st.info("🧠 No trained models found yet. Run `python run_pipeline.py` to train LSTM, Attention LSTM, and Transformer models.")
@@ -124,8 +123,7 @@ if len(daily) > 30:
         ))
         fig_fc.update_layout(**PLOTLY_LAYOUT, height=400,
                              title=f"{model_choice} Forecast — Next {forecast_days} Days",
-                             hovermode="x unified",
-                             legend=dict(orientation="h", y=1.05, x=0.5, xanchor="center"))
+                             hovermode="x unified")
         st.plotly_chart(fig_fc, use_container_width=True)
 
     # Forecast KPIs
@@ -174,8 +172,7 @@ if len(daily) > 30:
                                       line=dict(color="#f59e0b", width=2.5, dash="dot"),
                                       hovertemplate="₹%{y:,.0f}<extra>Scenario</extra>"))
     fig_scenario.update_layout(**PLOTLY_LAYOUT, height=350,
-                               title="Scenario vs Base Forecast", hovermode="x unified",
-                               legend=dict(orientation="h", y=1.05, x=0.5, xanchor="center"))
+                               title="Scenario vs Base Forecast", hovermode="x unified")
     st.plotly_chart(fig_scenario, use_container_width=True)
 
     delta = scenario_values.sum() - forecast_values.sum()
@@ -218,7 +215,6 @@ if len(daily) > 30:
                                       marker=dict(color="#ef4444", size=8, symbol="diamond",
                                                   line=dict(color="white", width=1)),
                                       hovertemplate="<b>Anomaly</b><br>₹%{y:,.0f}<extra></extra>"))
-    fig_anom.update_layout(**PLOTLY_LAYOUT, height=360, hovermode="x unified",
-                           legend=dict(orientation="h", y=1.05, x=0.5, xanchor="center"))
+    fig_anom.update_layout(**PLOTLY_LAYOUT, height=360, hovermode="x unified")
     st.plotly_chart(fig_anom, use_container_width=True)
     st.info(f"🔍 Detected **{len(anomalies)} anomalous days** out of {len(daily)} total days ({len(anomalies)/len(daily)*100:.1f}%)")

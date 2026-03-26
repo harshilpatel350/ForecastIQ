@@ -171,8 +171,7 @@ if "date" in cols and "total_amount" in cols:
                              labels={"total_amount": "Revenue (₹)", "year_month": "Month"},
                              color_discrete_sequence=["#6c63ff"])
 
-    fig_cohort.update_layout(**PLOTLY_LAYOUT, height=400, hovermode="x unified",
-                              legend=dict(orientation="h", y=-0.15))
+    fig_cohort.update_layout(**PLOTLY_LAYOUT, height=400, hovermode="x unified")
     st.plotly_chart(fig_cohort, use_container_width=True)
 
     st.markdown("---")
