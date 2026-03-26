@@ -45,7 +45,7 @@ with c5:
     if date_col and len(filtered) > 0:
         d_min = pd.to_datetime(filtered[date_col].min())
         d_max = pd.to_datetime(filtered[date_col].max())
-        date_span = f"{d_min.strftime('%b %Y')} — {d_max.strftime('%b %Y')}"
+        date_span = f"{d_min.strftime('%b %y')} — {d_max.strftime('%b %y')}"
         kpi_card("Date Span", date_span, icon="📅")
     else:
         kpi_card("Categories", f"{len(cat_cols)}", icon="📊")

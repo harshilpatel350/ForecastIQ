@@ -37,6 +37,8 @@ if not date_col or len(num_cols) == 0:
     st.warning("⚠️ This page requires a **date** and at least one **numeric** column in your dataset for forecasting.")
     st.stop()
 
+daily = load_daily_data(filtered)
+
 # Check requirements for time series
 if len(daily) < 20:
     st.error("🚨 **Insufficient Data for AI Forecasting**")
