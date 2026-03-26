@@ -258,9 +258,10 @@ def generate_dataset(
     # Shuffle slightly to break perfect ordering within same hour (realistic)
     df = df.sort_values("datetime").reset_index(drop=True)
 
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    df.to_csv(output_path, index=False)
-    print(f"✅ Generated {len(df):,} rows → {output_path}")
+    if output_path:
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        df.to_csv(output_path, index=False)
+        print(f"✅ Generated {len(df):,} rows → {output_path}")
     return df
 
 

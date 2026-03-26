@@ -327,10 +327,16 @@ PLOTLY_LAYOUT = dict(
 def load_data():
     path = os.path.join(PROJECT_ROOT, "data", "sales_data.parquet")
     if not os.path.exists(path):
-        st.error("⚠️ Dataset not found. Run `python src/data_generation.py` first.")
-        st.stop()
-    df = pd.read_parquet(path)
-    return df
+        with st.spinner("⚠️ Dataset not found. Generating a fresh AI dataset for deployment (this takes ~15 seconds)..."):
+            sys.path.insert(0, os.path.join(PROJECT_ROOT, "src"))
+            from data_generation import generate_dataset
+            # Generate 1 year of data instead of 3 to keep it lightweight for cloud
+            df = generate_dataset(start_date="2024-01-01", end_date="2024-12-31", output_path="")
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            df.to_parquet(path)
+            st.success("Dataset generated successfully!")
+            return df
+    return pd.read_parquet(path)
 
 
 @st.cache_data(ttl=600)
