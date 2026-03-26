@@ -337,12 +337,14 @@ def load_app_data():
             df.to_parquet(path)
             st.success("Dataset generated successfully!")
             df["datetime"] = pd.to_datetime(df["datetime"])
-            df["date"] = df["datetime"].dt.date
+            df["date"] = df["datetime"].dt.normalize()
             return df
     
     df = pd.read_parquet(path)
+    # Ensure datetime is a proper Timestamp
     df["datetime"] = pd.to_datetime(df["datetime"])
-    df["date"] = df["datetime"].dt.date
+    # Set date as a normalized timestamp at midnight (keeps the .dt accessor alive)
+    df["date"] = df["datetime"].dt.normalize()
     return df
 
 
@@ -423,7 +425,9 @@ def render_sidebar(df):
         # ── Apply base filters first to cascade ──
         filtered = df.copy()
         if len(date_range) == 2:
-            filtered = filtered[(filtered["date"].dt.date >= date_range[0]) & (filtered["date"].dt.date <= date_range[1])]
+            start_dt = pd.to_datetime(date_range[0])
+            end_dt = pd.to_datetime(date_range[1])
+            filtered = filtered[(filtered["date"] >= start_dt) & (filtered["date"] <= end_dt)]
         if selected_cities:
             filtered = filtered[filtered["city"].isin(selected_cities)]
         if selected_categories:
