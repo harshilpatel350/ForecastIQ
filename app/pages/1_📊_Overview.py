@@ -27,6 +27,7 @@ schema = st.session_state.get("schema", {"date_col": None, "numeric_cols": [], "
 num_cols = schema["numeric_cols"]
 cat_cols = schema["categorical_cols"]
 date_col = schema["date_col"]
+cols = filtered.columns.tolist()
 
 # ════════════════════════════════════════════════════════════════════════════
 # HERO HEADER

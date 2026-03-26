@@ -26,32 +26,36 @@ cols = filtered.columns.tolist()
 st.markdown('<p class="brand-header">🍕 Product Intelligence</p>', unsafe_allow_html=True)
 st.markdown('<p class="brand-subtitle">Actionable insights to optimize your product portfolio — identify stars, underperformers, and growth opportunities</p>', unsafe_allow_html=True)
 
-if "product" not in cols or "total_amount" not in cols:
-    st.warning("⚠️ This page requires **product** and **total_amount** columns in your dataset.")
+# Retrieve schema extracted by streamlit_app
+schema = st.session_state.get("schema", {"date_col": None, "numeric_cols": [], "categorical_cols": []})
+num_cols = schema["numeric_cols"]
+cat_cols = schema["categorical_cols"]
+date_col = schema["date_col"]
+
+if len(cat_cols) == 0 or len(num_cols) == 0:
+    st.warning("⚠️ This page requires at least one categorical and one numeric column.")
     st.stop()
 
 # ── Product Stats ────────────────────────────────────────────────────────
-agg_dict = {
-    "total_revenue": ("total_amount", "sum"),
-    "total_orders": ("order_id", "count"),
-}
-if "unit_price" in cols: agg_dict["avg_price"] = ("unit_price", "mean")
-if "rating" in cols: agg_dict["avg_rating"] = ("rating", "mean")
-if "cancellation_flag" in cols: agg_dict["cancel_rate"] = ("cancellation_flag", "mean")
+target_cat = cat_cols[0]
+target_num = num_cols[0]
+cat_name = target_cat.replace("_", " ").title()
+num_name = target_num.replace("_", " ").title()
 
-product_stats = filtered.groupby("product").agg(**agg_dict).reset_index().sort_values("total_revenue", ascending=False)
+product_stats = filtered.groupby(target_cat).agg(
+    total_val=(target_num, "sum"),
+    total_count=("order_id", "count"),
+).reset_index().sort_values("total_val", ascending=False)
 
 # ── Top 10 Products ──────────────────────────────────────────────────────
-st.markdown('<div class="section-title">🏆 Top Performing Products</div>', unsafe_allow_html=True)
-st.markdown('<p class="section-subtitle">Highest revenue-generating products</p>', unsafe_allow_html=True)
+st.markdown(f'<div class="section-title">🏆 Top Performing {cat_name}s</div>', unsafe_allow_html=True)
+st.markdown(f'<p class="section-subtitle">Highest {num_name}-generating {cat_name}s</p>', unsafe_allow_html=True)
 
 top10 = product_stats.head(10)
-color_col = "avg_rating" if "avg_rating" in top10.columns else "total_revenue"
-fig_top = px.bar(top10, x="total_revenue", y="product", orientation="h",
-                 color=color_col, color_continuous_scale=["#fca5a5", "#fde68a", "#86efac"],
-                 labels={"total_revenue": "Revenue (₹)", "product": ""})
-fig_top.update_layout(**PLOTLY_LAYOUT, height=450, coloraxis_colorbar=dict(title="Rating" if color_col == "avg_rating" else "Revenue", thickness=12))
-fig_top.update_traces(hovertemplate="<b>%{y}</b><br>Revenue: ₹%{x:,.0f}<extra></extra>")
+fig_top = px.bar(top10, x="total_val", y=target_cat, orientation="h",
+                 color="total_val", color_continuous_scale=["#c7d2fe", "#6c63ff"],
+                 labels={"total_val": num_name, target_cat: ""})
+fig_top.update_layout(**PLOTLY_LAYOUT, height=450, coloraxis_showscale=False)
 st.plotly_chart(fig_top, use_container_width=True)
 
 # Best seller KPIs
@@ -59,113 +63,76 @@ if len(top10) > 0:
     best = top10.iloc[0]
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        kpi_card("👑 Best Seller", best["product"], icon="🏆")
+        kpi_card(f"👑 Best {cat_name}", f"{best[target_cat]}", icon="🏆")
     with c2:
-        kpi_card("Revenue", f"₹{best['total_revenue']:,.0f}", icon="💰")
+        kpi_card(f"Total {num_name}", f"₹{best['total_val']:,.0f}" if best['total_val'] > 1000 else f"{best['total_val']:.2f}", icon="💰")
     with c3:
-        kpi_card("Orders", f"{best['total_orders']:,}", icon="📦")
+        kpi_card("Total Recs", f"{best['total_count']:,}", icon="📦")
     with c4:
-        if "avg_rating" in best.index:
-            kpi_card("Avg Rating", f"{best['avg_rating']:.2f} ⭐", icon="⭐")
-        else:
-            kpi_card("Share", f"{best['total_revenue']/product_stats['total_revenue'].sum()*100:.1f}%", icon="📊")
+        share = (best['total_val'] / product_stats['total_val'].sum() * 100) if product_stats['total_val'].sum() > 0 else 0
+        kpi_card("Share", f"{share:.1f}%", icon="📊")
 
 st.markdown("---")
 
-# ── Underperforming Products ──────────────────────────────────────────────
-st.markdown('<div class="section-title">⚠️ Underperforming Products</div>', unsafe_allow_html=True)
-
-bottom10 = product_stats.tail(10).sort_values("total_revenue", ascending=True)
-color_col_b = "cancel_rate" if "cancel_rate" in bottom10.columns else "total_revenue"
-fig_bot = px.bar(bottom10, x="total_revenue", y="product", orientation="h",
-                 color=color_col_b,
-                 color_continuous_scale=["#86efac", "#fde68a", "#fca5a5"] if color_col_b == "cancel_rate" else ["#c7d2fe", "#6c63ff"],
-                 labels={"total_revenue": "Revenue (₹)", "product": ""})
-fig_bot.update_layout(**PLOTLY_LAYOUT, height=400, coloraxis_colorbar=dict(title="Cancel %" if color_col_b == "cancel_rate" else "Revenue", thickness=12))
+# ── Underperforming Entities ──────────────────────────────────────────────
+st.markdown(f'<div class="section-title">⚠️ Underperforming {cat_name}s</div>', unsafe_allow_html=True)
+bottom10 = product_stats.tail(10).sort_values("total_val", ascending=True)
+fig_bot = px.bar(bottom10, x="total_val", y=target_cat, orientation="h",
+                 color="total_val", color_continuous_scale=["#fca5a5", "#c7d2fe"],
+                 labels={"total_val": num_name, target_cat: ""})
+fig_bot.update_layout(**PLOTLY_LAYOUT, height=400, coloraxis_showscale=False)
 st.plotly_chart(fig_bot, use_container_width=True)
 
 st.markdown("---")
 
-# ── Product Demand Patterns ──────────────────────────────────────────────
-if "date" in cols:
-    st.markdown('<div class="section-title">📈 Product Demand Patterns</div>', unsafe_allow_html=True)
-    st.markdown('<p class="section-subtitle">Track weekly order and revenue trends for any product</p>', unsafe_allow_html=True)
+# ── Demand Patterns ──────────────────────────────────────────────────────
+if date_col:
+    st.markdown(f'<div class="section-title">📈 {cat_name} Demand Patterns</div>', unsafe_allow_html=True)
+    st.markdown(f'<p class="section-subtitle">Track weekly trends for any {cat_name}</p>', unsafe_allow_html=True)
 
-    selected_product = st.selectbox("Select a product to analyze:", sorted(filtered["product"].unique().tolist()))
-    prod_data = filtered[filtered["product"] == selected_product].copy()
-    prod_data["week"] = pd.to_datetime(prod_data["date"], errors="coerce").dt.to_period("W").astype(str)
+    selected_entity = st.selectbox(f"Select a {cat_name} to analyze:", sorted(filtered[target_cat].dropna().unique().tolist()))
+    ent_data = filtered[filtered[target_cat] == selected_entity].copy()
+    ent_data["week"] = pd.to_datetime(ent_data[date_col], errors="coerce").dt.to_period("W").astype(str)
 
-    weekly_demand = prod_data.groupby("week").agg(
-        orders=("order_id", "count"),
-        revenue=("total_amount", "sum"),
+    weekly_demand = ent_data.groupby("week").agg(
+        recs=("order_id", "count"),
+        val=(target_num, "sum"),
     ).reset_index()
 
     col1, col2 = st.columns(2)
     with col1:
-        fig_pd = px.line(weekly_demand, x="week", y="orders",
-                         title=f"Weekly Orders — {selected_product}",
+        fig_pd = px.line(weekly_demand, x="week", y="recs",
+                         title=f"Weekly Records — {selected_entity}",
                          color_discrete_sequence=["#6c63ff"])
-        fig_pd.update_layout(**PLOTLY_LAYOUT, height=350, xaxis_title="", yaxis_title="Orders")
+        fig_pd.update_layout(**PLOTLY_LAYOUT, height=350, xaxis_title="", yaxis_title="Count")
         st.plotly_chart(fig_pd, use_container_width=True)
 
     with col2:
-        fig_pr = px.area(weekly_demand, x="week", y="revenue",
-                         title=f"Weekly Revenue — {selected_product}",
+        fig_pr = px.area(weekly_demand, x="week", y="val",
+                         title=f"Weekly {num_name} — {selected_entity}",
                          color_discrete_sequence=["#3b82f6"])
-        fig_pr.update_layout(**PLOTLY_LAYOUT, height=350, xaxis_title="", yaxis_title="Revenue (₹)")
+        fig_pr.update_layout(**PLOTLY_LAYOUT, height=350, xaxis_title="", yaxis_title=num_name)
         fig_pr.update_traces(fill="tozeroy", fillcolor="rgba(59,130,246,0.12)")
         st.plotly_chart(fig_pr, use_container_width=True)
 
     st.markdown("---")
 
-# ── Category × Product Treemap ───────────────────────────────────────────
-if "category" in cols:
-    st.markdown('<div class="section-title">🗂️ Revenue Distribution Treemap</div>', unsafe_allow_html=True)
-    tree_data = filtered.groupby(["category", "product"])["total_amount"].sum().reset_index()
-    fig_tree = px.treemap(tree_data, path=["category", "product"], values="total_amount",
-                          color="total_amount",
-                          color_continuous_scale=["#e0e7ff", "#a5b4fc", "#6c63ff", "#4338ca"])
+# ── Dynamic Hierarchy Treemap ───────────────────────────────────────────
+if len(cat_cols) > 1:
+    st.markdown(f'<div class="section-title">🗂️ {num_name} Distribution Treemap</div>', unsafe_allow_html=True)
+    tree_path = cat_cols[:2] if len(cat_cols) >= 2 else [cat_cols[0]]
+    tree_data = filtered.groupby(tree_path)[target_num].sum().reset_index()
+    fig_tree = px.treemap(tree_data, path=tree_path, values=target_num,
+                          color=target_num, color_continuous_scale=["#e0e7ff", "#6c63ff"])
     fig_tree.update_layout(**PLOTLY_LAYOUT, height=500, coloraxis_showscale=False)
-    fig_tree.update_traces(hovertemplate="<b>%{label}</b><br>Revenue: ₹%{value:,.0f}<extra></extra>")
     st.plotly_chart(fig_tree, use_container_width=True)
 
     st.markdown("---")
 
-# ── AI Recommendations ───────────────────────────────────────────────────
-if "rating" in cols:
-    st.markdown('<div class="section-title">💡 AI-Powered Recommendations</div>', unsafe_allow_html=True)
+# ── Dynamic Insights ────────────────────────────────────────────────────
+st.markdown('<div class="section-title">💡 Automated Insights</div>', unsafe_allow_html=True)
+top_entity = product_stats.iloc[0]
+low_entity = product_stats.iloc[-1]
 
-    median_rating = product_stats["avg_rating"].median()
-
-    star_products = product_stats[
-        (product_stats["total_orders"] > product_stats["total_orders"].quantile(0.60)) &
-        (product_stats["avg_rating"] >= median_rating)
-    ].sort_values("total_revenue", ascending=False).head(5)
-
-    if len(star_products) > 0:
-        st.success("🌟 **Star Products** — High demand + above-average rating:")
-        for _, row in star_products.iterrows():
-            st.markdown(f"- **{row['product']}** — {row['total_orders']:,} orders · "
-                        f"₹{row['total_revenue']:,.0f} revenue · "
-                        f"⭐ {row['avg_rating']:.1f}")
-
-    problem_products = product_stats[
-        (product_stats["total_orders"] < product_stats["total_orders"].quantile(0.30)) &
-        (product_stats["avg_rating"] < median_rating)
-    ].sort_values("total_revenue", ascending=True).head(5)
-
-    if len(problem_products) > 0:
-        st.warning("⚠️ **Needs Attention** — Low demand + below-average rating:")
-        for _, row in problem_products.iterrows():
-            cancel_info = f" · Cancel: {row['cancel_rate']*100:.1f}%" if "cancel_rate" in row.index else ""
-            st.markdown(f"- **{row['product']}** — {row['total_orders']:,} orders · "
-                        f"⭐ {row['avg_rating']:.1f}{cancel_info}")
-
-    if "cancel_rate" in product_stats.columns:
-        cancel_threshold = max(product_stats["cancel_rate"].quantile(0.80), 0.05)
-        high_cancel = product_stats[product_stats["cancel_rate"] > cancel_threshold].sort_values("cancel_rate", ascending=False).head(5)
-        if len(high_cancel) > 0:
-            st.error(f"🚨 **High Cancellation Alert** — Products with >{cancel_threshold*100:.0f}% cancellation rate:")
-            for _, row in high_cancel.iterrows():
-                st.markdown(f"- **{row['product']}** — Cancel rate: {row['cancel_rate']*100:.1f}% · "
-                            f"{row['total_orders']:,} orders")
+st.info(f"🏆 **Top Performer**: '{top_entity[target_cat]}' leads with a total {num_name} of **{top_entity['total_val']:,.0f}**.")
+st.warning(f"📉 **Lowest Performer**: '{low_entity[target_cat]}' has the lowest {num_name} volume in this dataset.")

@@ -23,26 +23,37 @@ df = get_active_dataset()
 filtered = render_sidebar(df)
 cols = filtered.columns.tolist()
 
+# Retrieve schema extracted by streamlit_app
+schema = st.session_state.get("schema", {"date_col": None, "numeric_cols": [], "categorical_cols": []})
+num_cols = schema["numeric_cols"]
+cat_cols = schema["categorical_cols"]
+date_col = schema["date_col"]
+
 st.markdown('<p class="brand-header">🔬 Deep Analytics</p>', unsafe_allow_html=True)
 st.markdown('<p class="brand-subtitle">Uncover hidden patterns through multi-dimensional drill-down analysis</p>', unsafe_allow_html=True)
 
-# ── Drill-Down: City → Restaurant → Product ──────────────────────────────
-if "city" in cols and "total_amount" in cols:
-    st.markdown('<div class="section-title">🏙️ City → Restaurant → Product Drill-Down</div>', unsafe_allow_html=True)
-    st.markdown('<p class="section-subtitle">Click through the hierarchy to explore revenue at every level</p>', unsafe_allow_html=True)
+# ── Drill-Down: Hierarchy Analysis ──────────────────────────────────────────
+if len(cat_cols) > 0 and len(num_cols) > 0:
+    target_metric = num_cols[0]
+    metric_name = target_metric.replace("_", " ").title()
+    cat_primary = cat_cols[0]
+    cat_label = cat_primary.replace("_", " ").title()
 
-    city_rev = filtered.groupby("city")["total_amount"].sum().sort_values(ascending=False).reset_index()
-    selected_drill_city = st.selectbox("Select a city to drill into:", ["— Select a city —"] + city_rev["city"].tolist(), key="drill_city")
+    st.markdown(f'<div class="section-title">🏙️ {cat_label} → Details Drill-Down</div>', unsafe_allow_html=True)
+    st.markdown('<p class="section-subtitle">Click through the hierarchy to explore metrics at every level</p>', unsafe_allow_html=True)
 
-    if selected_drill_city != "— Select a city —":
-        city_data = filtered[filtered["city"] == selected_drill_city]
+    agg_data = filtered.groupby(cat_primary)[target_metric].sum().sort_values(ascending=False).reset_index()
+    selected_drill_val = st.selectbox(f"Select a {cat_label} to drill into:", ["— Select —"] + agg_data[cat_primary].tolist(), key="drill_val")
+
+    if selected_drill_val != "— Select —":
+        drill_data = filtered[filtered[cat_primary] == selected_drill_val]
 
         # City-level KPIs
         kc1, kc2, kc3, kc4 = st.columns(4)
         with kc1:
-            kpi_card("City Revenue", f"₹{city_data['total_amount'].sum():,.0f}", icon="💰")
+            kpi_card(f"Total {metric_name}", f"₹{drill_data[target_metric].sum():,.0f}", icon="💰")
         with kc2:
-            kpi_card("Orders", f"{len(city_data):,}", icon="📦")
+            kpi_card("Records", f"{len(drill_data):,}", icon="📦")
         with kc3:
             if "rating" in cols:
                 kpi_card("Avg Rating", f"{city_data['rating'].mean():.2f}", icon="⭐")
@@ -52,40 +63,45 @@ if "city" in cols and "total_amount" in cols:
         st.markdown("")
 
         col1, col2 = st.columns(2)
-        if "restaurant" in cols:
+        if len(cat_cols) > 1:
             with col1:
-                rest_rev = city_data.groupby("restaurant")["total_amount"].sum().sort_values(ascending=True).reset_index()
-                fig_r = px.bar(rest_rev, x="total_amount", y="restaurant", orientation="h",
-                               color="total_amount", color_continuous_scale=["#c7d2fe", "#6c63ff"],
-                               title=f"Restaurant Revenue — {selected_drill_city}")
+                cat_sec = cat_cols[1]
+                cat_sec_label = cat_sec.replace("_", " ").title()
+                sec_rev = drill_data.groupby(cat_sec)[target_metric].sum().sort_values(ascending=True).tail(15).reset_index()
+                fig_r = px.bar(sec_rev, x=target_metric, y=cat_sec, orientation="h",
+                               color=target_metric, color_continuous_scale=["#c7d2fe", "#6c63ff"],
+                               title=f"{metric_name} by {cat_sec_label}")
                 fig_r.update_layout(**PLOTLY_LAYOUT, height=400, coloraxis_showscale=False)
                 fig_r.update_traces(hovertemplate="₹%{x:,.0f}<extra></extra>")
                 st.plotly_chart(fig_r, use_container_width=True)
 
-        if "category" in cols:
+        if len(cat_cols) > 2:
             with col2:
-                cat_rev = city_data.groupby("category")["total_amount"].sum().reset_index()
-                fig_c = px.pie(cat_rev, values="total_amount", names="category", hole=0.48,
-                               title=f"Category Split — {selected_drill_city}",
+                cat_ter = cat_cols[2]
+                cat_ter_label = cat_ter.replace("_", " ").title()
+                ter_rev = drill_data.groupby(cat_ter)[target_metric].sum().reset_index()
+                fig_c = px.pie(ter_rev, values=target_metric, names=cat_ter, hole=0.48,
+                               title=f"Distribution by {cat_ter_label}",
                                color_discrete_sequence=px.colors.qualitative.Set3)
                 fig_c.update_traces(textposition="outside", textinfo="percent+label", textfont_size=11)
                 fig_c.update_layout(**PLOTLY_LAYOUT, height=400, showlegend=False)
                 st.plotly_chart(fig_c, use_container_width=True)
 
-        # Restaurant → Product drill
-        if "restaurant" in cols and "product" in cols:
-            rest_list = city_data["restaurant"].unique().tolist()
-            selected_restaurant = st.selectbox("Drill into a restaurant:", ["— Select —"] + sorted(rest_list), key="drill_rest")
-            if selected_restaurant != "— Select —":
-                rest_data = city_data[city_data["restaurant"] == selected_restaurant]
-                prod_rev = rest_data.groupby("product")["total_amount"].sum().sort_values(ascending=True).reset_index()
-                fig_p = px.bar(prod_rev, x="total_amount", y="product", orientation="h",
-                               color="total_amount", color_continuous_scale=["#bfdbfe", "#3b82f6"],
-                               title=f"Product Revenue — {selected_restaurant}")
-                fig_p.update_layout(**PLOTLY_LAYOUT, height=380, coloraxis_showscale=False)
-                fig_p.update_traces(hovertemplate="₹%{x:,.0f}<extra></extra>")
-                st.plotly_chart(fig_p, use_container_width=True)
-
+        # Dynamic drill into next level
+        if len(num_cols) > 0 and len(cat_cols) > 1:
+            cat_sec = cat_cols[1]
+            cat_sec_label = cat_sec.replace("_", " ").title()
+            
+            st.markdown(f"**Drill into {cat_sec_label} details:**")
+            sec_list = drill_data[cat_sec].dropna().unique().tolist()
+            selected_sec = st.selectbox(f"Select a {cat_sec_label}:", ["— Select —"] + sorted([str(x) for x in sec_list]), key="drill_sec")
+            
+            if selected_sec != "— Select —":
+                sub_data = drill_data[drill_data[cat_sec].astype(str) == selected_sec]
+                if len(num_cols) > 0:
+                    summary_data = sub_data.mean(numeric_only=True)
+                    st.write(f"Average {metric_name}: ₹{sub_data[target_metric].mean():,.0f}")
+        
     st.markdown("---")
 
 # ── Heatmap: Hour × Weekday ──────────────────────────────────────────────
@@ -94,14 +110,14 @@ if "weekday" in cols and "hour" in cols:
     st.markdown('<p class="section-subtitle">Identify peak demand windows to optimize staffing and promotions</p>', unsafe_allow_html=True)
 
     metric_options = ["Orders"]
-    if "total_amount" in cols: metric_options.append("Revenue")
+    if len(num_cols) > 0: metric_options.append(num_cols[0].replace("_", " ").title())
     if "rating" in cols: metric_options.append("Avg Rating")
     heatmap_metric = st.radio("Select metric:", metric_options, horizontal=True)
 
     if heatmap_metric == "Orders":
         heat_data = filtered.groupby(["weekday", "hour"])["order_id"].count().reset_index(name="value")
-    elif heatmap_metric == "Revenue":
-        heat_data = filtered.groupby(["weekday", "hour"])["total_amount"].sum().reset_index(name="value")
+    elif len(num_cols) > 0 and heatmap_metric == num_cols[0].replace("_", " ").title():
+        heat_data = filtered.groupby(["weekday", "hour"])[num_cols[0]].sum().reset_index(name="value")
     else:
         heat_data = filtered.groupby(["weekday", "hour"])["rating"].mean().reset_index(name="value")
 
@@ -120,55 +136,68 @@ if "weekday" in cols and "hour" in cols:
 
     st.markdown("---")
 
-# ── Weather Impact ────────────────────────────────────────────────────────
-if "weather" in cols and "total_amount" in cols:
-    st.markdown('<div class="section-title">🌦️ Weather Impact Analysis</div>', unsafe_allow_html=True)
-    st.markdown('<p class="section-subtitle">How weather conditions affect order volume, revenue, and cancellations</p>', unsafe_allow_html=True)
+# ── Environment / Group Impact ──────────────────────────────────────────────
+impact_col = next((c for c in ["weather", "inventory_status"] if c in cols), 
+                  cat_cols[0] if len(cat_cols) > 0 else None)
+target_metric = num_cols[0] if len(num_cols) > 0 else None
+
+if impact_col and target_metric:
+    st.markdown(f'<div class="section-title">🌦️ {impact_col.title()} Impact Analysis</div>', unsafe_allow_html=True)
+    st.markdown(f'<p class="section-subtitle">How {impact_col} affects {target_metric.replace("_", " ")} and volume</p>', unsafe_allow_html=True)
 
     col_w1, col_w2 = st.columns(2)
     with col_w1:
-        weather_rev = filtered.groupby("weather").agg(
-            avg_revenue=("total_amount", "mean"),
-            total_orders=("order_id", "count"),
+        impact_stats = filtered.groupby(impact_col).agg(
+            avg_val=(target_metric, "mean"),
+            total_count=("order_id", "count"),
         ).reset_index()
-        fig_wt = px.bar(weather_rev, x="weather", y="avg_revenue", color="weather",
-                        color_discrete_sequence=["#6c63ff", "#3b82f6", "#06b6d4", "#22c55e", "#f59e0b", "#ef4444"],
-                        title="Avg Order Value by Weather")
-        fig_wt.update_layout(**PLOTLY_LAYOUT, height=350, showlegend=False, xaxis_title="", yaxis_title="Avg Revenue (₹)")
-        fig_wt.update_traces(hovertemplate="₹%{y:,.0f}<extra></extra>")
+        fig_wt = px.bar(impact_stats, x=impact_col, y="avg_val", color=impact_col,
+                        color_discrete_sequence=px.colors.qualitative.Pastel,
+                        title=f"Avg {target_metric.replace('_', ' ').title()} by {impact_col.title()}")
+        fig_wt.update_layout(**PLOTLY_LAYOUT, height=350, showlegend=False, xaxis_title="", yaxis_title="Avg Value")
         st.plotly_chart(fig_wt, use_container_width=True)
 
     if "cancellation_flag" in cols:
         with col_w2:
-            weather_cancel = filtered.groupby("weather")["cancellation_flag"].mean().reset_index()
-            weather_cancel["cancellation_flag"] *= 100
-            fig_wc = px.bar(weather_cancel, x="weather", y="cancellation_flag", color="weather",
-                            color_discrete_sequence=["#6c63ff", "#3b82f6", "#06b6d4", "#22c55e", "#f59e0b", "#ef4444"],
-                            title="Cancellation Rate by Weather",
-                            labels={"cancellation_flag": "Cancel Rate (%)"})
-            fig_wc.update_layout(**PLOTLY_LAYOUT, height=350, showlegend=False, xaxis_title="", yaxis_title="Cancel Rate (%)")
+            cancel_stats = filtered.groupby(impact_col)["cancellation_flag"].mean().reset_index()
+            cancel_stats["cancellation_flag"] *= 100
+            fig_wc = px.bar(cancel_stats, x=impact_col, y="cancellation_flag", color=impact_col,
+                            title="Cancellation Rate (%)", color_discrete_sequence=px.colors.qualitative.Pastel)
+            fig_wc.update_layout(**PLOTLY_LAYOUT, height=350, showlegend=False)
             st.plotly_chart(fig_wc, use_container_width=True)
+    elif len(num_cols) > 1:
+        with col_w2:
+            m2 = num_cols[1]
+            m2_stats = filtered.groupby(impact_col)[m2].mean().reset_index()
+            fig_m2 = px.bar(m2_stats, x=impact_col, y=m2, color=impact_col,
+                            title=f"Avg {m2.replace('_', ' ').title()}", color_discrete_sequence=px.colors.qualitative.Pastel)
+            fig_m2.update_layout(**PLOTLY_LAYOUT, height=350, showlegend=False)
+            st.plotly_chart(fig_m2, use_container_width=True)
 
     st.markdown("---")
 
-# ── Monthly Revenue Cohort ────────────────────────────────────────────────
-if "date" in cols and "total_amount" in cols:
-    label = "Monthly Revenue by City" if "city" in cols else "Monthly Revenue Trend"
+# ── Trend Metrics ─────────────────────────────────────────────────────────
+if date_col and len(num_cols) > 0:
+    target_metric = num_cols[0]
+    metric_label = target_metric.replace("_", " ").title()
+    label = f"Monthly {metric_label} by {cat_cols[0].title()}" if len(cat_cols) > 0 else f"{metric_label} Trend"
+    
     st.markdown(f'<div class="section-title">👥 {label}</div>', unsafe_allow_html=True)
-    st.markdown('<p class="section-subtitle">Track revenue trends month-over-month</p>', unsafe_allow_html=True)
+    st.markdown('<p class="section-subtitle">Track trends over time months-over-month</p>', unsafe_allow_html=True)
 
     filtered_c = filtered.copy()
-    filtered_c["year_month"] = pd.to_datetime(filtered_c["date"], errors="coerce").dt.to_period("M").astype(str)
+    filtered_c["year_month"] = pd.to_datetime(filtered_c[date_col], errors="coerce").dt.to_period("M").astype(str)
 
-    if "city" in cols:
-        monthly = filtered_c.groupby(["year_month", "city"])["total_amount"].sum().reset_index()
-        fig_cohort = px.line(monthly, x="year_month", y="total_amount", color="city",
-                             labels={"total_amount": "Revenue (₹)", "year_month": "Month"},
+    if len(cat_cols) > 0:
+        c1 = cat_cols[0]
+        monthly = filtered_c.groupby(["year_month", c1])[target_metric].sum().reset_index()
+        fig_cohort = px.line(monthly, x="year_month", y=target_metric, color=c1,
+                             labels={target_metric: metric_label, "year_month": "Month"},
                              color_discrete_sequence=px.colors.qualitative.Plotly)
     else:
-        monthly = filtered_c.groupby("year_month")["total_amount"].sum().reset_index()
-        fig_cohort = px.line(monthly, x="year_month", y="total_amount",
-                             labels={"total_amount": "Revenue (₹)", "year_month": "Month"},
+        monthly = filtered_c.groupby("year_month")[target_metric].sum().reset_index()
+        fig_cohort = px.line(monthly, x="year_month", y=target_metric,
+                             labels={target_metric: metric_label, "year_month": "Month"},
                              color_discrete_sequence=["#6c63ff"])
 
     fig_cohort.update_layout(**PLOTLY_LAYOUT, height=400, hovermode="x unified")

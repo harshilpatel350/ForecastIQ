@@ -26,9 +26,15 @@ cols = filtered.columns.tolist()
 st.markdown('<p class="brand-header">🔮 Forecasting Engine</p>', unsafe_allow_html=True)
 st.markdown('<p class="brand-subtitle">AI-driven demand prediction with confidence intervals and scenario planning</p>', unsafe_allow_html=True)
 
+# Retrieve schema extracted by streamlit_app
+schema = st.session_state.get("schema", {"date_col": None, "numeric_cols": [], "categorical_cols": []})
+num_cols = schema["numeric_cols"]
+cat_cols = schema["categorical_cols"]
+date_col = schema["date_col"]
+
 # Check minimum requirements
-if "date" not in cols or "total_amount" not in cols:
-    st.warning("⚠️ This page requires **date** and **total_amount** columns in your dataset for forecasting.")
+if not date_col or len(num_cols) == 0:
+    st.warning("⚠️ This page requires a **date** and at least one **numeric** column in your dataset for forecasting.")
     st.stop()
 
 daily = load_daily_data(filtered)
@@ -75,8 +81,10 @@ else:
 st.markdown("---")
 
 # ── Forecast Visualization ────────────────────────────────────────────────
-st.markdown('<div class="section-title">📈 Revenue Forecast</div>', unsafe_allow_html=True)
-st.markdown('<p class="section-subtitle">Project future revenue based on historical patterns with confidence intervals</p>', unsafe_allow_html=True)
+target_metric = num_cols[0]
+metric_label = target_metric.replace("_", " ").title()
+st.markdown(f'<div class="section-title">📈 {metric_label} Forecast</div>', unsafe_allow_html=True)
+st.markdown('<p class="section-subtitle">Project future performance based on historical patterns with confidence intervals</p>', unsafe_allow_html=True)
 
 col_f1, col_f2 = st.columns([1, 3])
 with col_f1:
@@ -84,10 +92,11 @@ with col_f1:
     model_choice = st.selectbox("🤖 Model", ["LSTM", "Attention LSTM", "Transformer"], index=2)
     confidence_level = st.slider("📊 Confidence Level", 80, 99, 95, step=5)
 
-if len(daily) > 30:
-    recent = daily["daily_revenue"].values[-30:]
+if len(daily) > 20:
+    target_col = "daily_revenue" if "daily_revenue" in daily.columns else "daily_orders"
+    recent = daily[target_col].values[-30:] if len(daily) >= 30 else daily[target_col].values
     base_trend = np.mean(recent)
-    trend_slope = (recent[-1] - recent[0]) / len(recent)
+    trend_slope = (recent[-1] - recent[0]) / len(recent) if len(recent) > 1 else 0
 
     last_date = pd.to_datetime(daily["date"].max())
     forecast_dates = pd.date_range(last_date + pd.Timedelta(days=1), periods=forecast_days)
@@ -106,10 +115,10 @@ if len(daily) > 30:
 
     with col_f2:
         fig_fc = go.Figure()
-        fig_fc.add_trace(go.Scatter(x=daily["date"].tail(90), y=daily["daily_revenue"].tail(90),
+        fig_fc.add_trace(go.Scatter(x=daily["date"].tail(90), y=daily[target_col].tail(90),
                                     name="Historical", mode="lines",
                                     line=dict(color="#6c63ff", width=2),
-                                    hovertemplate="₹%{y:,.0f}<extra>Historical</extra>"))
+                                    hovertemplate="%{y:,.0f}<extra>Historical</extra>"))
         fig_fc.add_trace(go.Scatter(x=forecast_dates, y=forecast_values,
                                     name="Forecast", mode="lines",
                                     line=dict(color="#06b6d4", width=2.5, dash="dash"),
