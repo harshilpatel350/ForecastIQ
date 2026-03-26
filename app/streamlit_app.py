@@ -335,8 +335,14 @@ def load_data():
             os.makedirs(os.path.dirname(path), exist_ok=True)
             df.to_parquet(path)
             st.success("Dataset generated successfully!")
+            df["datetime"] = pd.to_datetime(df["datetime"])
+            df["date"] = pd.to_datetime(df["date"])
             return df
-    return pd.read_parquet(path)
+    
+    df = pd.read_parquet(path)
+    df["datetime"] = pd.to_datetime(df["datetime"])
+    df["date"] = pd.to_datetime(df["date"])
+    return df
 
 
 @st.cache_data(ttl=600)
