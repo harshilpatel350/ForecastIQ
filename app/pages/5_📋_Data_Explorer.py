@@ -32,23 +32,27 @@ st.markdown('<p class="brand-subtitle">Browse, search, and export your complete 
 # ── Data Quality KPIs ────────────────────────────────────────────────────
 missing_pct = filtered.isna().sum().sum() / (len(filtered) * len(filtered.columns)) * 100
 
-c1, c2, c3, c4, c5 = st.columns(5)
-with c1:
+st.markdown('<div class="section-title">📊 Dataset Intelligence</div>', unsafe_allow_html=True)
+row1_c1, row1_c2, row1_c3 = st.columns(3)
+with row1_c1:
     kpi_card("Records", f"{len(filtered):,}", icon="📦")
-with c2:
+with row1_c2:
     kpi_card("Columns", f"{len(filtered.columns)}", icon="📑")
-with c3:
+with row1_c3:
     kpi_card("Missing Data", f"{missing_pct:.2f}%", None, missing_pct < 1, "🔍")
-with c4:
-    kpi_card("Numeric Cols", f"{len(num_cols)}", icon="🔢")
-with c5:
+
+st.markdown("")
+row2_c1, row2_c2 = st.columns(2)
+with row2_c1:
+    kpi_card("Detected Numeric Metrics", f"{len(num_cols)}", icon="🔢")
+with row2_c2:
     if date_col and len(filtered) > 0:
         d_min = pd.to_datetime(filtered[date_col].min())
         d_max = pd.to_datetime(filtered[date_col].max())
         date_span = f"{d_min.strftime('%b %y')} — {d_max.strftime('%b %y')}"
-        kpi_card("Date Span", date_span, icon="📅")
+        kpi_card("Temporal Span", date_span, icon="📅")
     else:
-        kpi_card("Categories", f"{len(cat_cols)}", icon="📊")
+        kpi_card("Detected Categories", f"{len(cat_cols)}", icon="📊")
 
 st.markdown("")
 
