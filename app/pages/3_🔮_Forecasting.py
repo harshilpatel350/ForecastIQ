@@ -16,15 +16,22 @@ sys.path.insert(0, PROJECT_ROOT)
 st.set_page_config(page_title="Forecasting — ForecastIQ", page_icon="🔮", layout="wide")
 
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "app"))
-from streamlit_app import inject_css, load_market_data, load_daily_data, render_sidebar, kpi_card, PLOTLY_LAYOUT
+from streamlit_app import inject_css, get_active_dataset, load_daily_data, render_sidebar, kpi_card, PLOTLY_LAYOUT
 
 inject_css()
-df = load_market_data()
+df = get_active_dataset()
 filtered = render_sidebar(df)
-daily = load_daily_data(filtered)
+cols = filtered.columns.tolist()
 
 st.markdown('<p class="brand-header">🔮 Forecasting Engine</p>', unsafe_allow_html=True)
 st.markdown('<p class="brand-subtitle">AI-driven demand prediction with confidence intervals and scenario planning</p>', unsafe_allow_html=True)
+
+# Check minimum requirements
+if "date" not in cols or "total_amount" not in cols:
+    st.warning("⚠️ This page requires **date** and **total_amount** columns in your dataset for forecasting.")
+    st.stop()
+
+daily = load_daily_data(filtered)
 
 # ── Model Comparison ────────────────────────────────────────────────────
 comparison_path = os.path.join(PROJECT_ROOT, "data", "model_comparison.json")
@@ -40,9 +47,9 @@ if models_available:
     metrics_df = pd.DataFrame(model_results).T.reset_index().rename(columns={"index": "Model"})
 
     # Model cards
-    cols = st.columns(len(metrics_df))
+    model_cols = st.columns(len(metrics_df))
     for i, row in metrics_df.iterrows():
-        with cols[i]:
+        with model_cols[i]:
             is_best = row["RMSE"] == metrics_df["RMSE"].min()
             badge = " 🏆" if is_best else ""
             model_type = row["Model"].upper()
@@ -123,7 +130,6 @@ if len(daily) > 30:
 
     # Forecast KPIs
     st.markdown('<div class="section-title">📊 Forecast Summary</div>', unsafe_allow_html=True)
-    st.markdown('<p class="section-subtitle">Key projections for the selected time horizon</p>', unsafe_allow_html=True)
     kc1, kc2, kc3, kc4 = st.columns(4)
     with kc1:
         kpi_card("Projected Revenue", f"₹{forecast_values.sum():,.0f}", icon="💰")

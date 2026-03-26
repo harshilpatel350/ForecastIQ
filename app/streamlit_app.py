@@ -379,6 +379,59 @@ def load_model_results():
     return None
 
 
+# ── Custom Upload Helpers ──────────────────────────────────────────────────
+def _normalize_uploaded_df(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize an uploaded CSV so it works with the dashboard.
+    Auto-detects date columns, lowercases column names, and ensures
+    the 'date' and 'datetime' columns are proper Timestamps."""
+    # Lowercase all column names for case-insensitive matching
+    df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
+
+    # Try to find / create a datetime column
+    if "datetime" in df.columns:
+        df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
+    elif "date" in df.columns:
+        df["datetime"] = pd.to_datetime(df["date"], errors="coerce")
+    else:
+        # Try to find any column that looks like a date
+        for col in df.columns:
+            if df[col].dtype == "object":
+                try:
+                    parsed = pd.to_datetime(df[col], errors="coerce")
+                    if parsed.notna().sum() > len(df) * 0.5:  # >50% valid dates
+                        df["datetime"] = parsed
+                        break
+                except Exception:
+                    continue
+
+    # Ensure 'date' column exists as normalized timestamp
+    if "datetime" in df.columns:
+        df["date"] = df["datetime"].dt.normalize()
+        if "hour" not in df.columns:
+            df["hour"] = df["datetime"].dt.hour
+        if "weekday" not in df.columns:
+            df["weekday"] = df["datetime"].dt.weekday
+        if "month" not in df.columns:
+            df["month"] = df["datetime"].dt.month
+        if "year" not in df.columns:
+            df["year"] = df["datetime"].dt.year
+        if "day_of_year" not in df.columns:
+            df["day_of_year"] = df["datetime"].dt.day_of_year
+
+    # Generate a synthetic order_id if missing
+    if "order_id" not in df.columns:
+        df["order_id"] = [f"ORD-{i}" for i in range(1, len(df) + 1)]
+
+    return df
+
+
+def get_active_dataset() -> pd.DataFrame:
+    """Return the uploaded dataset if available, otherwise the default."""
+    if "uploaded_df" in st.session_state and st.session_state["uploaded_df"] is not None:
+        return st.session_state["uploaded_df"]
+    return load_market_data()
+
+
 # ── KPI Card Helper ───────────────────────────────────────────────────────
 def kpi_card(title: str, value: str, delta: str = None, delta_positive: bool = True, icon: str = ""):
     delta_html = ""
@@ -399,6 +452,8 @@ def kpi_card(title: str, value: str, delta: str = None, delta_positive: bool = T
 
 # ── Sidebar ────────────────────────────────────────────────────────────────
 def render_sidebar(df):
+    cols = df.columns.tolist()
+
     with st.sidebar:
         # Brand header
         st.markdown("""
@@ -409,86 +464,137 @@ def render_sidebar(df):
         """, unsafe_allow_html=True)
         st.markdown("---")
 
-        # ── Date Range ──
-        # Defensive conversion to ensure we have actual date objects for the widget
-        try:
-            raw_min = df["date"].min()
-            raw_max = df["date"].max()
-            
-            # If they are strings or other types, force to Timestamp then to date
-            min_date = pd.to_datetime(raw_min).date()
-            max_date = pd.to_datetime(raw_max).date()
-        except:
-            # Fallback for unexpected data states
-            min_date = datetime.now().date() - timedelta(days=30)
-            max_date = datetime.now().date()
+        # ── Custom Dataset Upload ──
+        st.markdown("##### 📂 Dataset")
+        uploaded_file = st.file_uploader(
+            "Upload your own CSV", type=["csv"],
+            key="csv_uploader",
+            help="Upload a CSV file to analyze your own data. The dashboard will adapt to your columns."
+        )
 
-        date_range = st.date_input("📅 Date Range", [min_date, max_date], min_value=min_date, max_value=max_date)
+        if uploaded_file is not None:
+            try:
+                raw_df = pd.read_csv(uploaded_file)
+                normalized = _normalize_uploaded_df(raw_df)
+                st.session_state["uploaded_df"] = normalized
+                st.success(f"✅ Loaded **{len(normalized):,}** rows · **{len(normalized.columns)}** columns")
+            except Exception as e:
+                st.error(f"❌ Failed to parse CSV: {e}")
 
-        # ── City ──
-        cities = sorted(df["city"].unique().tolist())
-        selected_cities = st.multiselect("🏙️ City", cities, default=cities, key="filter_city")
+        # Show clear button if custom data is active
+        if "uploaded_df" in st.session_state and st.session_state["uploaded_df"] is not None:
+            st.caption("🔄 Using **uploaded dataset**")
+            if st.button("❌ Clear Upload & Use Default", key="clear_upload"):
+                st.session_state["uploaded_df"] = None
+                st.rerun()
+            # Refresh df to use uploaded data
+            df = st.session_state["uploaded_df"]
+            cols = df.columns.tolist()
+        else:
+            st.caption("📦 Using **default dataset**")
 
-        # ── Category ──
-        categories = sorted(df["category"].unique().tolist())
-        selected_categories = st.multiselect("🍽️ Category", categories, default=categories, key="filter_category")
+        st.markdown("---")
+
+        # ── Date Range (only if 'date' column exists) ──
+        if "date" in cols:
+            try:
+                raw_min = df["date"].min()
+                raw_max = df["date"].max()
+                min_date = pd.to_datetime(raw_min).date()
+                max_date = pd.to_datetime(raw_max).date()
+            except:
+                min_date = datetime.now().date() - timedelta(days=30)
+                max_date = datetime.now().date()
+            date_range = st.date_input("📅 Date Range", [min_date, max_date], min_value=min_date, max_value=max_date)
+        else:
+            date_range = []
+
+        # ── City (adaptive) ──
+        selected_cities = []
+        if "city" in cols:
+            cities = sorted(df["city"].unique().tolist())
+            selected_cities = st.multiselect("🏙️ City", cities, default=cities, key="filter_city")
+
+        # ── Category (adaptive) ──
+        selected_categories = []
+        if "category" in cols:
+            categories = sorted(df["category"].unique().tolist())
+            selected_categories = st.multiselect("🍽️ Category", categories, default=categories, key="filter_category")
 
         # ── Apply base filters first to cascade ──
         filtered = df.copy()
-        if len(date_range) == 2:
+        if "date" in cols and len(date_range) == 2:
             start_dt = pd.to_datetime(date_range[0])
             end_dt = pd.to_datetime(date_range[1])
             filtered = filtered[(filtered["date"] >= start_dt) & (filtered["date"] <= end_dt)]
-        if selected_cities:
+        if selected_cities and "city" in cols:
             filtered = filtered[filtered["city"].isin(selected_cities)]
-        if selected_categories:
+        if selected_categories and "category" in cols:
             filtered = filtered[filtered["category"].isin(selected_categories)]
 
-        # ── Cascaded Filters ──
-        with st.expander("🔽 More Filters", expanded=False):
-            avail_restaurants = sorted(filtered["restaurant"].unique().tolist())
-            selected_restaurants = st.multiselect("🏪 Restaurant", avail_restaurants, default=avail_restaurants, key="filter_rest")
+        # ── Cascaded Filters (only show what exists) ──
+        more_filters = []
+        if "restaurant" in cols: more_filters.append("restaurant")
+        if "product" in cols: more_filters.append("product")
+        if "order_type" in cols: more_filters.append("order_type")
+        if "payment_method" in cols: more_filters.append("payment_method")
+        if "weather" in cols: more_filters.append("weather")
 
-            avail_products = sorted(filtered["product"].unique().tolist())
-            selected_products = st.multiselect("🍕 Product", avail_products, default=avail_products, key="filter_prod")
+        selected_restaurants = selected_products = selected_order_types = selected_pay = selected_weather = []
 
-            order_types = sorted(filtered["order_type"].unique().tolist())
-            selected_order_types = st.multiselect("🚗 Order Type", order_types, default=order_types, key="filter_ot")
+        if more_filters:
+            with st.expander("🔽 More Filters", expanded=False):
+                if "restaurant" in cols:
+                    avail_restaurants = sorted(filtered["restaurant"].unique().tolist())
+                    selected_restaurants = st.multiselect("🏪 Restaurant", avail_restaurants, default=avail_restaurants, key="filter_rest")
 
-            pay_methods = sorted(filtered["payment_method"].unique().tolist())
-            selected_pay = st.multiselect("💳 Payment Method", pay_methods, default=pay_methods, key="filter_pay")
+                if "product" in cols:
+                    avail_products = sorted(filtered["product"].unique().tolist())
+                    selected_products = st.multiselect("🍕 Product", avail_products, default=avail_products, key="filter_prod")
 
-            weathers = sorted(filtered["weather"].unique().tolist())
-            selected_weather = st.multiselect("🌦️ Weather", weathers, default=weathers, key="filter_weather")
+                if "order_type" in cols:
+                    order_types = sorted(filtered["order_type"].unique().tolist())
+                    selected_order_types = st.multiselect("🚗 Order Type", order_types, default=order_types, key="filter_ot")
+
+                if "payment_method" in cols:
+                    pay_methods = sorted(filtered["payment_method"].unique().tolist())
+                    selected_pay = st.multiselect("💳 Payment Method", pay_methods, default=pay_methods, key="filter_pay")
+
+                if "weather" in cols:
+                    weathers = sorted(filtered["weather"].unique().tolist())
+                    selected_weather = st.multiselect("🌦️ Weather", weathers, default=weathers, key="filter_weather")
 
         # Apply remaining filters
-        if selected_restaurants:
+        if selected_restaurants and "restaurant" in cols:
             filtered = filtered[filtered["restaurant"].isin(selected_restaurants)]
-        if selected_products:
+        if selected_products and "product" in cols:
             filtered = filtered[filtered["product"].isin(selected_products)]
-        if selected_order_types:
+        if selected_order_types and "order_type" in cols:
             filtered = filtered[filtered["order_type"].isin(selected_order_types)]
-        if selected_pay:
+        if selected_pay and "payment_method" in cols:
             filtered = filtered[filtered["payment_method"].isin(selected_pay)]
-        if selected_weather:
+        if selected_weather and "weather" in cols:
             filtered = filtered[filtered["weather"].isin(selected_weather)]
 
         st.markdown("---")
 
-        # Quick stats
+        # Quick stats (adaptive)
         st.markdown("##### ⚡ Dataset Overview")
-        stat_cols = st.columns(2)
-        with stat_cols[0]:
-            st.caption(f"📦 **{len(filtered):,}** orders")
-            st.caption(f"🏙️ **{filtered['city'].nunique()}** cities")
-        with stat_cols[1]:
-            st.caption(f"🍕 **{filtered['product'].nunique()}** products")
-            st.caption(f"📅 **{filtered['date'].nunique()}** days")
+        stat_cols_ui = st.columns(2)
+        with stat_cols_ui[0]:
+            st.caption(f"📦 **{len(filtered):,}** rows")
+            if "city" in cols:
+                st.caption(f"🏙️ **{filtered['city'].nunique()}** cities")
+        with stat_cols_ui[1]:
+            if "product" in cols:
+                st.caption(f"🍕 **{filtered['product'].nunique()}** products")
+            if "date" in cols:
+                st.caption(f"📅 **{filtered['date'].nunique()}** days")
 
         st.markdown("---")
         st.markdown(
             '<div style="text-align:center;">'
-            '<span class="version-badge">v1.0.0</span>'
+            '<span class="version-badge">v1.1.0</span>'
             '</div>',
             unsafe_allow_html=True,
         )
@@ -500,7 +606,7 @@ def render_sidebar(df):
 # ── Main Entry Point (redirects to Overview) ──────────────────────────────
 def main():
     inject_css()
-    df = load_market_data()
+    df = get_active_dataset()
     filtered = render_sidebar(df)
 
     # Show a welcome message — all analytics live on the Overview page

@@ -14,19 +14,18 @@ sys.path.insert(0, PROJECT_ROOT)
 st.set_page_config(page_title="Data Explorer — ForecastIQ", page_icon="📋", layout="wide")
 
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "app"))
-from streamlit_app import inject_css, load_market_data, render_sidebar, kpi_card, PLOTLY_LAYOUT
+from streamlit_app import inject_css, get_active_dataset, render_sidebar, kpi_card, PLOTLY_LAYOUT
 
 inject_css()
-df = load_market_data()
+df = get_active_dataset()
 filtered = render_sidebar(df)
+cols = filtered.columns.tolist()
 
 st.markdown('<p class="brand-header">📋 Data Explorer</p>', unsafe_allow_html=True)
 st.markdown('<p class="brand-subtitle">Browse, search, and export your complete dataset with advanced filtering</p>', unsafe_allow_html=True)
 
 # ── Data Quality KPIs ────────────────────────────────────────────────────
 missing_pct = filtered.isna().sum().sum() / (len(filtered) * len(filtered.columns)) * 100
-cancel_pct = filtered["cancellation_flag"].mean() * 100
-unique_cust = filtered["customer_id"].nunique()
 
 c1, c2, c3, c4, c5 = st.columns(5)
 with c1:
@@ -36,67 +35,78 @@ with c2:
 with c3:
     kpi_card("Missing Data", f"{missing_pct:.2f}%", None, missing_pct < 1, "🔍")
 with c4:
-    kpi_card("Unique Customers", f"{unique_cust:,}", icon="👥")
+    if "customer_id" in cols:
+        kpi_card("Unique Customers", f"{filtered['customer_id'].nunique():,}", icon="👥")
+    else:
+        kpi_card("Numeric Cols", f"{len(filtered.select_dtypes(include=[np.number]).columns)}", icon="🔢")
 with c5:
-    d_min = pd.to_datetime(filtered['date'].min())
-    d_max = pd.to_datetime(filtered['date'].max())
-    date_span = f"{d_min.strftime('%b %Y')} — {d_max.strftime('%b %Y')}"
-    kpi_card("Date Span", date_span, icon="📅")
+    if "date" in cols:
+        d_min = pd.to_datetime(filtered['date'].min())
+        d_max = pd.to_datetime(filtered['date'].max())
+        date_span = f"{d_min.strftime('%b %Y')} — {d_max.strftime('%b %Y')}"
+        kpi_card("Date Span", date_span, icon="📅")
+    else:
+        kpi_card("Dtypes", f"{filtered.dtypes.nunique()}", icon="📊")
 
 st.markdown("")
 
 # ── Advanced Filters ─────────────────────────────────────────────────────
 with st.expander("🔧 Advanced Column Filters", expanded=False):
-    col_a, col_b, col_c = st.columns(3)
+    filter_cols = st.columns(3)
 
-    with col_a:
-        selected_restaurants = st.multiselect("🏪 Restaurant",
-            sorted(filtered["restaurant"].unique().tolist()),
-            default=None, key="explorer_rest")
-
-    with col_b:
-        selected_products = st.multiselect("🍕 Product",
-            sorted(filtered["product"].unique().tolist()),
-            default=None, key="explorer_prod")
-
-    with col_c:
-        order_types = st.multiselect("🚗 Order Type",
-            sorted(filtered["order_type"].unique().tolist()),
-            default=None, key="explorer_ot")
-
-    col_d, col_e, col_f = st.columns(3)
-    with col_d:
-        min_amount = st.number_input("Min Amount (₹)", min_value=0, value=0, key="min_amt")
-    with col_e:
-        max_amount = st.number_input("Max Amount (₹)", min_value=0,
-                                     value=int(filtered["total_amount"].max()) + 1, key="max_amt")
-    with col_f:
-        cancel_filter = st.selectbox("Cancellation Status",
-                                     ["All", "Not Cancelled", "Cancelled Only"], key="cancel_f")
-
-    # Apply advanced filters
     view_df = filtered.copy()
-    if selected_restaurants:
-        view_df = view_df[view_df["restaurant"].isin(selected_restaurants)]
-    if selected_products:
-        view_df = view_df[view_df["product"].isin(selected_products)]
-    if order_types:
-        view_df = view_df[view_df["order_type"].isin(order_types)]
-    if min_amount > 0:
-        view_df = view_df[view_df["total_amount"] >= min_amount]
-    if max_amount < filtered["total_amount"].max() + 1:
-        view_df = view_df[view_df["total_amount"] <= max_amount]
-    if cancel_filter == "Not Cancelled":
-        view_df = view_df[view_df["cancellation_flag"] == 0]
-    elif cancel_filter == "Cancelled Only":
-        view_df = view_df[view_df["cancellation_flag"] == 1]
+
+    with filter_cols[0]:
+        if "restaurant" in cols:
+            selected_restaurants = st.multiselect("🏪 Restaurant",
+                sorted(filtered["restaurant"].unique().tolist()),
+                default=None, key="explorer_rest")
+            if selected_restaurants:
+                view_df = view_df[view_df["restaurant"].isin(selected_restaurants)]
+
+    with filter_cols[1]:
+        if "product" in cols:
+            selected_products = st.multiselect("🍕 Product",
+                sorted(filtered["product"].unique().tolist()),
+                default=None, key="explorer_prod")
+            if selected_products:
+                view_df = view_df[view_df["product"].isin(selected_products)]
+
+    with filter_cols[2]:
+        if "order_type" in cols:
+            order_types = st.multiselect("🚗 Order Type",
+                sorted(filtered["order_type"].unique().tolist()),
+                default=None, key="explorer_ot")
+            if order_types:
+                view_df = view_df[view_df["order_type"].isin(order_types)]
+
+    filter_cols2 = st.columns(3)
+    with filter_cols2[0]:
+        if "total_amount" in cols:
+            min_amount = st.number_input("Min Amount (₹)", min_value=0, value=0, key="min_amt")
+            if min_amount > 0:
+                view_df = view_df[view_df["total_amount"] >= min_amount]
+    with filter_cols2[1]:
+        if "total_amount" in cols:
+            max_amount = st.number_input("Max Amount (₹)", min_value=0,
+                                         value=int(filtered["total_amount"].max()) + 1, key="max_amt")
+            if max_amount < filtered["total_amount"].max() + 1:
+                view_df = view_df[view_df["total_amount"] <= max_amount]
+    with filter_cols2[2]:
+        if "cancellation_flag" in cols:
+            cancel_filter = st.selectbox("Cancellation Status",
+                                         ["All", "Not Cancelled", "Cancelled Only"], key="cancel_f")
+            if cancel_filter == "Not Cancelled":
+                view_df = view_df[view_df["cancellation_flag"] == 0]
+            elif cancel_filter == "Cancelled Only":
+                view_df = view_df[view_df["cancellation_flag"] == 1]
 
 if "view_df" not in dir():
     view_df = filtered.copy()
 
 # ── Search ───────────────────────────────────────────────────────────────
 search_term = st.text_input("🔍 Full-text search across all columns",
-                            placeholder="e.g., Chicken Biryani, Mumbai, Swiggy, UPI…")
+                            placeholder="Search across any column...")
 if search_term:
     mask = view_df.astype(str).apply(
         lambda col: col.str.contains(search_term, case=False, na=False)
@@ -105,10 +115,13 @@ if search_term:
 
 # ── Column Visibility ────────────────────────────────────────────────────
 all_cols = view_df.columns.tolist()
-default_cols = ["order_id", "datetime", "city", "restaurant", "product", "category",
-                "quantity", "total_amount", "payment_method", "order_type", "rating",
-                "weather", "cancellation_flag"]
-default_cols = [c for c in default_cols if c in all_cols]
+# Prefer showing common useful columns
+preferred = ["order_id", "datetime", "date", "city", "restaurant", "product", "category",
+             "quantity", "total_amount", "payment_method", "order_type", "rating",
+             "weather", "cancellation_flag"]
+default_cols = [c for c in preferred if c in all_cols]
+if not default_cols:
+    default_cols = all_cols[:10]
 
 with st.expander("📑 Column Visibility", expanded=False):
     selected_cols = st.multiselect("Select columns to display:", all_cols, default=default_cols, key="vis_cols")
