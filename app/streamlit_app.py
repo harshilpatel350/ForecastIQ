@@ -6,7 +6,8 @@ Main Streamlit entry point with industry-grade SaaS design.
 import streamlit as st
 import pandas as pd
 import numpy as np
-import os, sys, json, typing
+import os, sys, json
+import typing
 from datetime import datetime, timedelta
 import plotly.express as px
 import plotly.graph_objects as go
@@ -624,7 +625,7 @@ def _normalize_uploaded_df(df: pd.DataFrame) -> pd.DataFrame:
 
 def extract_schema(df: pd.DataFrame) -> dict:
     """Analyze the dataframe and categorize columns for dynamic UI generation."""
-    schema: dict[str, typing.Any] = {"date_col": None, "numeric_cols": [], "categorical_cols": []}
+    schema = {"date_col": None, "numeric_cols": [], "categorical_cols": []}
     
     for col in df.columns:
         if pd.api.types.is_datetime64_any_dtype(df[col]):
@@ -652,7 +653,7 @@ def get_active_dataset() -> pd.DataFrame:
 
 
 # ── KPI Card Helper ───────────────────────────────────────────────────────
-def kpi_card(title: str, value: str, delta: typing.Optional[str] = None, delta_positive: bool = True, icon: str = ""):
+def kpi_card(title: str, value: str, delta=None, delta_positive: bool = True, icon: str = ""):
     delta_html = ""
     if delta:
         cls = "positive" if delta_positive else "negative"
