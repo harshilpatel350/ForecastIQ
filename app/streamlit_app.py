@@ -687,19 +687,32 @@ def render_sidebar(df):
         # ── Custom Dataset Upload ──
         st.markdown("##### 📂 Dataset")
         uploaded_file = st.file_uploader(
-            "Upload your own CSV", type=["csv"],
+            "Upload any Dataset", type=["csv", "xlsx", "xls", "parquet", "json"],
             key="csv_uploader",
-            help="Upload a CSV file to analyze your own data. The dashboard will adapt to your columns."
+            help="Upload a CSV, Excel, Parquet, or JSON file. The dashboard will automatically detect the schema."
         )
 
         if uploaded_file is not None:
             try:
-                raw_df = pd.read_csv(uploaded_file)
+                # 🧪 Flexible parsing for all file types
+                fname = uploaded_file.name.lower()
+                if fname.endswith(".csv"):
+                    raw_df = pd.read_csv(uploaded_file)
+                elif fname.endswith((".xlsx", ".xls")):
+                    raw_df = pd.read_excel(uploaded_file)
+                elif fname.endswith(".parquet"):
+                    raw_df = pd.read_parquet(uploaded_file)
+                elif fname.endswith(".json"):
+                    raw_df = pd.read_json(uploaded_file)
+                else:
+                    st.error("🚫 Unsupported file format.")
+                    st.stop()
+
                 normalized = _normalize_uploaded_df(raw_df)
                 st.session_state["uploaded_df"] = normalized
                 st.success(f"✅ Loaded **{len(normalized):,}** rows · **{len(normalized.columns)}** columns")
             except Exception as e:
-                st.error(f"❌ Failed to parse CSV: {e}")
+                st.error(f"❌ Failed to parse data: {e}")
 
         # Show clear button if custom data is active
         if "uploaded_df" in st.session_state and st.session_state["uploaded_df"] is not None:
