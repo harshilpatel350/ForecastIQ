@@ -181,22 +181,124 @@ def inject_css():
             background: #fee2e2;
         }
 
-        /* ─── Responsive Adjustments ─── */
+        /* ─── Responsive: Large Screens (≤1400px) ─── */
+        @media (max-width: 1400px) {
+            .kpi-card { padding: 18px 18px; }
+            .kpi-value { font-size: 22px; }
+            .kpi-title { font-size: 10px; letter-spacing: 0.6px; }
+        }
+
+        /* ─── Responsive: Medium Screens / Small Laptops (≤1200px) ─── */
         @media (max-width: 1200px) {
             .kpi-card { padding: 16px 14px; }
             .kpi-value { font-size: 20px; }
             .kpi-title { font-size: 10px; }
+            .brand-header { font-size: 24px; }
+            .brand-subtitle { font-size: 14px; }
+            .section-title { font-size: 16px; }
+            .section-subtitle { font-size: 12px; }
         }
 
+        /* ─── Responsive: Tablets (≤992px) ─── */
         @media (max-width: 992px) {
-            .kpi-card { padding: 12px 10px; }
-            .kpi-value { font-size: 15px; }
+            .kpi-card { padding: 14px 12px; }
+            .kpi-value { font-size: 18px; letter-spacing: -0.3px; }
             .kpi-title { font-size: 9px; letter-spacing: 0.5px; }
-            .kpi-icon { font-size: 16px; margin-bottom: 2px;}
-            .kpi-delta { font-size: 10px; padding: 2px 4px; }
-            
-            /* Constrain sidebar width on smaller laptops */
+            .kpi-icon { font-size: 16px; margin-bottom: 2px; }
+            .kpi-delta { font-size: 10px; padding: 2px 6px; }
+            .brand-header { font-size: 22px; }
+            .brand-subtitle { font-size: 13px; margin-bottom: 14px; }
+            .section-title { font-size: 15px; margin: 20px 0 6px 0; }
+
+            /* Constrain sidebar */
             section[data-testid="stSidebar"] { min-width: 260px !important; max-width: 260px !important; }
+            .sidebar-brand-name { font-size: 18px; }
+
+            /* Stack Streamlit columns for tablets */
+            [data-testid="stHorizontalBlock"] {
+                flex-wrap: wrap !important;
+            }
+            [data-testid="stHorizontalBlock"] > [data-testid="stVerticalBlockBorderWrapper"] {
+                min-width: 48% !important;
+                flex: 1 1 48% !important;
+            }
+        }
+
+        /* ─── Responsive: Small Tablets / Large Phones (≤768px) ─── */
+        @media (max-width: 768px) {
+            .kpi-card { padding: 14px 12px; border-radius: 10px; }
+            .kpi-value { font-size: 18px; }
+            .kpi-title { font-size: 9px; letter-spacing: 0.4px; }
+            .kpi-icon { font-size: 15px; margin-bottom: 2px; }
+            .kpi-delta { font-size: 9px; padding: 2px 5px; }
+            .brand-header { font-size: 20px; letter-spacing: -0.5px; }
+            .brand-subtitle { font-size: 12px; margin-bottom: 10px; }
+            .section-title { font-size: 14px; margin: 16px 0 4px 0; padding-bottom: 6px; }
+            .section-subtitle { font-size: 11px; margin-bottom: 10px; }
+
+            /* Sidebar auto-collapse */
+            section[data-testid="stSidebar"] { min-width: 240px !important; max-width: 240px !important; }
+            .sidebar-brand-name { font-size: 16px; }
+            .sidebar-brand-tagline { font-size: 10px; }
+
+            /* Stack columns fully on smaller tablets */
+            [data-testid="stHorizontalBlock"] > [data-testid="stVerticalBlockBorderWrapper"] {
+                min-width: 100% !important;
+                flex: 1 1 100% !important;
+            }
+
+            /* Tabs: horizontal scroll */
+            .stTabs [data-baseweb="tab-list"] { overflow-x: auto; flex-wrap: nowrap; }
+            .stTabs [data-baseweb="tab"] { padding: 6px 14px; font-size: 12px; white-space: nowrap; }
+
+            /* DataFrames: horizontal scroll */
+            .stDataFrame { overflow-x: auto; }
+
+            /* Bigger touch targets for buttons */
+            .stButton > button { padding: 10px 20px; font-size: 14px; min-height: 44px; }
+        }
+
+        /* ─── Responsive: Mobile Phones (≤576px) ─── */
+        @media (max-width: 576px) {
+            .kpi-card { padding: 12px 10px; border-radius: 8px; }
+            .kpi-value { font-size: 16px; letter-spacing: -0.2px; }
+            .kpi-title { font-size: 8px; letter-spacing: 0.3px; margin-bottom: 4px; }
+            .kpi-icon { font-size: 14px; margin-bottom: 1px; }
+            .kpi-delta { font-size: 8px; padding: 1px 4px; border-radius: 12px; }
+            .kpi-card:hover { transform: none; } /* Disable hover lift on touch */
+
+            .brand-header { font-size: 18px; letter-spacing: -0.3px; }
+            .brand-subtitle { font-size: 11px; margin-bottom: 8px; line-height: 1.3; }
+            .section-title { font-size: 13px; margin: 12px 0 4px 0; padding-bottom: 4px; }
+            .section-subtitle { font-size: 10px; margin-bottom: 8px; }
+
+            /* Sidebar: minimal on mobile */
+            section[data-testid="stSidebar"] { min-width: 220px !important; max-width: 220px !important; }
+            .sidebar-brand-name { font-size: 15px; }
+            .sidebar-brand-tagline { font-size: 9px; }
+            .version-badge { font-size: 9px; padding: 2px 8px; }
+
+            /* Force single-column layout */
+            [data-testid="stHorizontalBlock"] {
+                flex-direction: column !important;
+            }
+            [data-testid="stHorizontalBlock"] > [data-testid="stVerticalBlockBorderWrapper"] {
+                min-width: 100% !important;
+                flex: 1 1 100% !important;
+            }
+
+            /* Inputs: full width, bigger touch */
+            .stSelectbox > div > div,
+            .stMultiSelect > div > div { font-size: 14px; }
+            .stTextInput > div > div > input { font-size: 14px; min-height: 44px; }
+            .stButton > button { width: 100%; min-height: 48px; font-size: 14px; }
+
+            /* Tabs: scrollable on mobile */
+            .stTabs [data-baseweb="tab-list"] { gap: 2px; }
+            .stTabs [data-baseweb="tab"] { padding: 5px 10px; font-size: 11px; }
+
+            /* Expander: tighter */
+            .streamlit-expanderHeader { font-size: 13px; }
         }
 
 
