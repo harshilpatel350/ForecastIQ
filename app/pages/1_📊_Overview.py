@@ -120,12 +120,12 @@ if date_col and len(num_cols) > 0:
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=daily[date_col], y=daily["daily_val"],
                              name=f"Daily {metric_name}", mode="lines",
-                             line=dict(color="rgba(108,99,255,0.25)", width=1),
+                             line={"color": "rgba(108,99,255,0.25)", "width": 1},
                              fill="tozeroy", fillcolor="rgba(108,99,255,0.05)",
                              hovertemplate="%{y:,.0f}<extra>Daily</extra>"))
     fig.add_trace(go.Scatter(x=daily[date_col], y=daily["ma_7"],
                              name="7-Day Average", mode="lines",
-                             line=dict(color="#6c63ff", width=2.5),
+                             line={"color": "#6c63ff", "width": 2.5},
                              hovertemplate="%{y:,.0f}<extra>7d Avg</extra>"))
     fig.update_layout(**PLOTLY_LAYOUT, height=370, hovermode="x unified")
     st.plotly_chart(fig, use_container_width=True)

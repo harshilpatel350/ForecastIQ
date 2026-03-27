@@ -6,7 +6,7 @@ Main Streamlit entry point with industry-grade SaaS design.
 import streamlit as st
 import pandas as pd
 import numpy as np
-import os, sys, json
+import os, sys, json, typing
 from datetime import datetime, timedelta
 import plotly.express as px
 import plotly.graph_objects as go
@@ -439,15 +439,15 @@ def inject_css():
 
 
 # ── Plotly Defaults ────────────────────────────────────────────────────────
-PLOTLY_LAYOUT = dict(
-    template="plotly_white",
-    plot_bgcolor="rgba(0,0,0,0)",
-    paper_bgcolor="rgba(0,0,0,0)",
-    font=dict(family="Inter, sans-serif", size=12, color="#2d1b69"),
-    margin=dict(l=10, r=10, t=40, b=10),
-    hoverlabel=dict(bgcolor="#ffffff", font_size=12, font_family="Inter", bordercolor="#ddd6fe"),
-    legend=dict(orientation="h", y=-0.2, x=0.5, xanchor="center")
-)
+PLOTLY_LAYOUT = {
+    "template": "plotly_white",
+    "plot_bgcolor": "rgba(0,0,0,0)",
+    "paper_bgcolor": "rgba(0,0,0,0)",
+    "font": {"family": "Inter, sans-serif", "size": 12, "color": "#2d1b69"},
+    "margin": {"l": 10, "r": 10, "t": 40, "b": 10},
+    "hoverlabel": {"bgcolor": "#ffffff", "font_size": 12, "font_family": "Inter", "bordercolor": "#ddd6fe"},
+    "legend": {"orientation": "h", "y": -0.2, "x": 0.5, "xanchor": "center"}
+}
 
 
 # ── Data Loading (Production: CSV-first, Parquet-cache) ────────────────────
@@ -624,7 +624,7 @@ def _normalize_uploaded_df(df: pd.DataFrame) -> pd.DataFrame:
 
 def extract_schema(df: pd.DataFrame) -> dict:
     """Analyze the dataframe and categorize columns for dynamic UI generation."""
-    schema = {"date_col": None, "numeric_cols": [], "categorical_cols": []}
+    schema: dict[str, typing.Any] = {"date_col": None, "numeric_cols": [], "categorical_cols": []}
     
     for col in df.columns:
         if pd.api.types.is_datetime64_any_dtype(df[col]):
@@ -652,7 +652,7 @@ def get_active_dataset() -> pd.DataFrame:
 
 
 # ── KPI Card Helper ───────────────────────────────────────────────────────
-def kpi_card(title: str, value: str, delta: str = None, delta_positive: bool = True, icon: str = ""):
+def kpi_card(title: str, value: str, delta: typing.Optional[str] = None, delta_positive: bool = True, icon: str = ""):
     delta_html = ""
     if delta:
         cls = "positive" if delta_positive else "negative"

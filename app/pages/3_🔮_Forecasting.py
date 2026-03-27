@@ -105,7 +105,7 @@ def run_lr_forecast(series, horizon):
         np.sin(2 * np.pi * np.arange(n) / 30),  # monthly sin
         np.cos(2 * np.pi * np.arange(n) / 30),  # monthly cos
     ])
-    y_train = series.values
+    y_train = np.asarray(series)
 
     model = Ridge(alpha=1.0)
     model.fit(X_train, y_train)
@@ -149,7 +149,7 @@ def compute_metrics(actual, predicted):
     mask = actual != 0
     rmse = np.sqrt(np.mean((actual - predicted) ** 2))
     mae = np.mean(np.abs(actual - predicted))
-    mape = np.mean(np.abs((actual[mask] - predicted[mask]) / actual[mask])) * 100 if mask.sum() > 0 else 0
+    mape = np.mean(np.abs((actual[mask] - predicted[mask]) / actual[mask])) * 100 if np.sum(mask) > 0 else 0
     return {"RMSE": round(rmse, 2), "MAE": round(mae, 2), "MAPE": round(mape, 1)}
 
 
@@ -245,20 +245,20 @@ with col_f2:
     fig_fc.add_trace(go.Scatter(
         x=daily["date"].tail(90), y=daily[target_col].tail(90),
         name="Historical", mode="lines",
-        line=dict(color="#6c63ff", width=2),
+        line={"color": "#6c63ff", "width": 2},
         hovertemplate="%{y:,.0f}<extra>Historical</extra>"))
     # Forecast
     fig_fc.add_trace(go.Scatter(
         x=forecast_dates, y=forecast_values,
         name="Forecast", mode="lines",
-        line=dict(color="#06b6d4", width=2.5, dash="dash"),
+        line={"color": "#06b6d4", "width": 2.5, "dash": "dash"},
         hovertemplate="%{y:,.0f}<extra>Forecast</extra>"))
     # Confidence band
     fig_fc.add_trace(go.Scatter(
         x=list(forecast_dates) + list(forecast_dates[::-1]),
         y=list(upper) + list(lower[::-1]),
         fill="toself", fillcolor="rgba(6,182,212,0.12)",
-        line=dict(color="rgba(0,0,0,0)"),
+        line={"color": "rgba(0,0,0,0)"},
         name=f"{confidence_level}% CI",
     ))
     fig_fc.update_layout(**PLOTLY_LAYOUT, height=400, hovermode="x unified",
@@ -303,11 +303,11 @@ scenario_values = scenario_values * (1 + demand_change / 100) * (1 + price_chang
 fig_scenario = go.Figure()
 fig_scenario.add_trace(go.Scatter(x=forecast_dates, y=forecast_values,
                                   name="Base Forecast", mode="lines",
-                                  line=dict(color="#6c63ff", width=2),
+                                  line={"color": "#6c63ff", "width": 2},
                                   hovertemplate="%{y:,.0f}<extra>Base</extra>"))
 fig_scenario.add_trace(go.Scatter(x=forecast_dates, y=scenario_values,
                                   name="Scenario", mode="lines",
-                                  line=dict(color="#f59e0b", width=2.5, dash="dot"),
+                                  line={"color": "#f59e0b", "width": 2.5, "dash": "dot"},
                                   hovertemplate="%{y:,.0f}<extra>Scenario</extra>"))
 fig_scenario.update_layout(**PLOTLY_LAYOUT, height=350,
                            title="Base Forecast vs Scenario Projection", hovermode="x unified")
@@ -340,19 +340,19 @@ anomalies = daily[(daily[target_col] > upper_bound) | (daily[target_col] < lower
 fig_anom = go.Figure()
 fig_anom.add_trace(go.Scatter(x=daily["date"], y=daily[target_col],
                               name=target_label, mode="lines",
-                              line=dict(color="#6c63ff", width=1.5),
+                              line={"color": "#6c63ff", "width": 1.5},
                               hovertemplate="%{y:,.0f}<extra></extra>"))
 fig_anom.add_trace(go.Scatter(x=daily["date"], y=upper_bound,
                               name="Upper Bound (2.5σ)", mode="lines",
-                              line=dict(color="#94a3b8", width=1, dash="dash")))
+                              line={"color": "#94a3b8", "width": 1, "dash": "dash"}))
 fig_anom.add_trace(go.Scatter(x=daily["date"], y=lower_bound,
                               name="Lower Bound (2.5σ)", mode="lines",
-                              line=dict(color="#94a3b8", width=1, dash="dash")))
+                              line={"color": "#94a3b8", "width": 1, "dash": "dash"}))
 if len(anomalies) > 0:
     fig_anom.add_trace(go.Scatter(x=anomalies["date"], y=anomalies[target_col],
                                   name="Anomalies", mode="markers",
-                                  marker=dict(color="#ef4444", size=8, symbol="diamond",
-                                              line=dict(color="white", width=1)),
+                                  marker={"color": "#ef4444", "size": 8, "symbol": "diamond",
+                                              "line": {"color": "white", "width": 1}},
                                   hovertemplate="<b>Anomaly</b><br>%{y:,.0f}<extra></extra>"))
 fig_anom.update_layout(**PLOTLY_LAYOUT, height=360, hovermode="x unified")
 st.plotly_chart(fig_anom, use_container_width=True)
