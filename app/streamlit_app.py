@@ -681,7 +681,7 @@ def render_sidebar(df):
         st.markdown("---")
         st.markdown(
             '<div style="text-align:center;">'
-            '<span class="version-badge">v2.0 Auto-EDA</span>'
+            '<span class="version-badge">v3.0 Production</span>'
             '</div>',
             unsafe_allow_html=True,
         )
@@ -699,7 +699,7 @@ def main():
 
     # Show a welcome message — all analytics live on the Overview page
     st.markdown('<p class="brand-header">🏠 Welcome to ForecastIQ</p>', unsafe_allow_html=True)
-    st.markdown('<p class="brand-subtitle">Navigate to any page using the sidebar to explore your sales data</p>', unsafe_allow_html=True)
+    st.markdown('<p class="brand-subtitle">Enterprise-grade analytics platform — upload any dataset to unlock insights instantly</p>', unsafe_allow_html=True)
 
     st.markdown("")
 
@@ -709,7 +709,7 @@ def main():
         <div class="kpi-card">
             <div class="kpi-icon">📊</div>
             <div class="kpi-title">Overview</div>
-            <div style="font-size:13px; color:#64748b;">KPIs, revenue trends, city & category breakdown</div>
+            <div style="font-size:13px; color:#64748b;">Automated KPIs, trend analysis, and multi-dimensional breakdowns</div>
         </div>
         """, unsafe_allow_html=True)
     with col2:
@@ -717,7 +717,7 @@ def main():
         <div class="kpi-card">
             <div class="kpi-icon">🔬</div>
             <div class="kpi-title">Deep Analytics</div>
-            <div style="font-size:13px; color:#64748b;">Drill-downs, heatmaps, weather & discount analysis</div>
+            <div style="font-size:13px; color:#64748b;">Hierarchy drill-downs, temporal heatmaps, and impact analysis</div>
         </div>
         """, unsafe_allow_html=True)
     with col3:
@@ -725,7 +725,7 @@ def main():
         <div class="kpi-card">
             <div class="kpi-icon">🔮</div>
             <div class="kpi-title">Forecasting</div>
-            <div style="font-size:13px; color:#64748b;">AI predictions, scenario simulation, anomaly detection</div>
+            <div style="font-size:13px; color:#64748b;">Statistical forecasting, live benchmarking, and scenario planning</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -737,7 +737,7 @@ def main():
         <div class="kpi-card">
             <div class="kpi-icon">🍕</div>
             <div class="kpi-title">Product Intelligence</div>
-            <div style="font-size:13px; color:#64748b;">Top/bottom products, demand patterns, AI recommendations</div>
+            <div style="font-size:13px; color:#64748b;">Performance ranking, demand patterns, and automated insights</div>
         </div>
         """, unsafe_allow_html=True)
     with col5:

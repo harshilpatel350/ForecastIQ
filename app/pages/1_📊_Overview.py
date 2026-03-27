@@ -33,7 +33,7 @@ cols = filtered.columns.tolist()
 # HERO HEADER
 # ════════════════════════════════════════════════════════════════════════════
 st.markdown('<p class="brand-header">📊 Dashboard Overview</p>', unsafe_allow_html=True)
-st.markdown('<p class="brand-subtitle">Dynamic intelligence — automatically analyzing your uploaded dataset schema</p>', unsafe_allow_html=True)
+st.markdown('<p class="brand-subtitle">Real-time business intelligence with automated KPI tracking and trend analysis</p>', unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════════════════════
 # DYNAMIC KPI ROW
