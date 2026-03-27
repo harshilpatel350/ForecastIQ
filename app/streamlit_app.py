@@ -619,24 +619,26 @@ def _normalize_uploaded_df(df: pd.DataFrame) -> pd.DataFrame:
 
 def extract_schema(df: pd.DataFrame) -> dict:
     """Analyze the dataframe and categorize columns for dynamic UI generation."""
-    schema = {"date_col": None, "numeric_cols": [], "categorical_cols": []}
+    m_date_col = None
+    m_num_cols = []
+    m_cat_cols = []
     
     for col in df.columns:
         if pd.api.types.is_datetime64_any_dtype(df[col]):
-            if not schema["date_col"] and col != "datetime":
-                schema["date_col"] = col
+            if not m_date_col and col != "datetime":
+                m_date_col = col
         elif pd.api.types.is_numeric_dtype(df[col]):
             # Keep anything that looks like a metric, exclude IDs/metadata
-            if not any(x in col.lower() for x in ["id", "zip", "latitude", "longitude", "year", "month", "day", "hour", "weekday"]):
-                schema["numeric_cols"].append(col)
+            if not any(x in str(col).lower() for x in ["id", "zip", "latitude", "longitude", "year", "month", "day", "hour", "weekday"]):
+                m_num_cols.append(col)
         elif df[col].dtype == "object" or df[col].dtype.name == "category":
-            if col.lower() != "datetime" and df[col].nunique() < 50:
-                schema["categorical_cols"].append(col)
+            if str(col).lower() != "datetime" and df[col].nunique() < 50:
+                m_cat_cols.append(col)
                 
-    if not schema["date_col"] and "date" in df.columns: schema["date_col"] = "date"
-    if not schema["date_col"] and "datetime" in df.columns: schema["date_col"] = "datetime"
+    if not m_date_col and "date" in df.columns: m_date_col = "date"
+    if not m_date_col and "datetime" in df.columns: m_date_col = "datetime"
                 
-    return schema
+    return {"date_col": m_date_col, "numeric_cols": m_num_cols, "categorical_cols": m_cat_cols}
 
 
 def get_active_dataset() -> pd.DataFrame:
@@ -769,7 +771,7 @@ def render_sidebar(df):
                                 
         for col, selected_items in active_filters.items():
             if selected_items:
-                filtered = filtered[filtered[col].isin(selected_items)]
+                filtered = filtered[filtered[col].isin(selected_items)]  # type: ignore
 
         st.markdown("---")
 
