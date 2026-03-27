@@ -89,8 +89,13 @@ st.markdown("---")
 if date_col:
     st.markdown(f'<div class="section-title">📈 {cat_name} Demand Patterns</div>', unsafe_allow_html=True)
     st.markdown(f'<p class="section-subtitle">Track weekly trends for any {cat_name}</p>', unsafe_allow_html=True)
-
-    selected_entity = st.selectbox(f"Select a {cat_name} to analyze:", sorted(filtered[target_cat].dropna().unique().tolist()))
+    
+    cat_items = sorted(filtered[target_cat].dropna().unique().tolist())
+    if not cat_items:
+        st.info("No categorical items found to analyze.")
+        st.stop()
+        
+    selected_entity = st.selectbox(f"Select a {cat_name} to analyze:", cat_items)
     ent_data = filtered[filtered[target_cat] == selected_entity].copy()
     ent_data["week"] = pd.to_datetime(ent_data[date_col], errors="coerce").dt.to_period("W").astype(str)
 

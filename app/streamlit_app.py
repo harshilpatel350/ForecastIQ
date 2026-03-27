@@ -12,13 +12,7 @@ from datetime import datetime, timedelta
 import plotly.express as px
 import plotly.graph_objects as go
 
-# ── Page Config ────────────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="ForecastIQ — AI Sales Analytics",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+# Removed top-level set_page_config to prevent import crashes in sub-pages
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
@@ -809,6 +803,12 @@ def render_sidebar(df):
 
 # ── Main Entry Point (redirects to Overview) ──────────────────────────────
 def main():
+    st.set_page_config(
+        page_title="ForecastIQ — AI Sales Analytics",
+        page_icon="📊",
+        layout="wide",
+        initial_sidebar_state="expanded",
+    )
     inject_css()
     df = get_active_dataset()
     filtered = render_sidebar(df)

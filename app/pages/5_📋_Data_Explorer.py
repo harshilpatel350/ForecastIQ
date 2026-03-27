@@ -30,7 +30,8 @@ st.markdown('<p class="brand-header">📋 Data Explorer</p>', unsafe_allow_html=
 st.markdown('<p class="brand-subtitle">Browse, search, and export your complete dynamic dataset</p>', unsafe_allow_html=True)
 
 # ── Data Quality KPIs ────────────────────────────────────────────────────
-missing_pct = filtered.isna().sum().sum() / (len(filtered) * len(filtered.columns)) * 100
+total_cells = len(filtered) * len(filtered.columns)
+missing_pct = (filtered.isna().sum().sum() / total_cells * 100) if total_cells > 0 else 0
 
 st.markdown('<div class="section-title">📊 Dataset Intelligence</div>', unsafe_allow_html=True)
 row1_c1, row1_c2, row1_c3 = st.columns(3)
