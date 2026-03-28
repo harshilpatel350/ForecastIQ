@@ -1,5 +1,7 @@
 # 📊 ForecastIQ — AI-Powered Sales Analytics Platform
 
+**Live Demo:** [https://forecastiq-jevaxukiahccbqfscyu6ej.streamlit.app/](https://forecastiq-jevaxukiahccbqfscyu6ej.streamlit.app/)
+
 A production-grade SaaS application for restaurant/product sales forecasting using advanced deep learning models (LSTM, Attention-LSTM, Transformer) with a highly interactive Streamlit dashboard.
 
 ## 🚀 Quick Start
