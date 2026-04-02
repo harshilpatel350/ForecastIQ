@@ -143,6 +143,99 @@ def run_ar_forecast(series, horizon):
         return np.maximum(0, fcast.values), model.resid.values
 
 
+# ── Deep Learning Models (LSTM & GRU) ──────────────────────────────────
+try:
+    import torch
+    import torch.nn as nn
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+
+if TORCH_AVAILABLE:
+    class DeepTSModel(nn.Module):
+        def __init__(self, rnn_type="LSTM", input_size=1, hidden_size=16, num_layers=1, bidirectional=False):
+            super().__init__()
+            self.rnn_type = rnn_type
+            direction_mult = 2 if bidirectional else 1
+            if rnn_type == "LSTM":
+                self.rnn = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, bidirectional=bidirectional)
+            elif rnn_type == "GRU":
+                self.rnn = nn.GRU(input_size, hidden_size, num_layers, batch_first=True, bidirectional=bidirectional)
+            self.fc = nn.Linear(hidden_size * direction_mult, 1)
+
+        def forward(self, x):
+            out, _ = self.rnn(x)
+            return self.fc(out[:, -1, :])
+
+    def run_dl_model(series, horizon, rnn_type="LSTM", num_layers=1, bidirectional=False):
+        if len(series) < 14:
+            return np.ones(horizon) * series.iloc[-1] if hasattr(series, 'iloc') else np.ones(horizon) * series[-1], np.zeros(len(series))
+            
+        series_arr = np.asarray(series)
+        series_min = np.min(series_arr)
+        series_max = np.max(series_arr)
+        denom = series_max - series_min if series_max > series_min else 1.0
+        scaled = (series_arr - series_min) / denom
+        
+        seq_length = min(7, len(scaled) // 3)
+        X, y = [], []
+        for i in range(len(scaled) - seq_length):
+            X.append(scaled[i:i + seq_length])
+            y.append(scaled[i + seq_length])
+            
+        if not X:
+            return np.ones(horizon) * series_arr[-1], np.zeros(len(series_arr))
+            
+        X_t = torch.tensor(np.array(X), dtype=torch.float32).unsqueeze(-1)
+        y_t = torch.tensor(np.array(y), dtype=torch.float32).unsqueeze(-1)
+        
+        model = DeepTSModel(rnn_type, 1, 16, num_layers, bidirectional)
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.02)
+        loss_fn = nn.MSELoss()
+        
+        model.train()
+        for _ in range(50):
+            optimizer.zero_grad()
+            loss = loss_fn(model(X_t), y_t)
+            loss.backward()
+            optimizer.step()
+            
+        model.eval()
+        with torch.no_grad():
+            hist_preds = model(X_t).squeeze(-1).numpy() * denom + series_min
+            if hist_preds.ndim == 0: hist_preds = np.array([hist_preds])
+            elif hist_preds.ndim > 1: hist_preds = hist_preds.flatten()
+            pad_val = series_arr[0] if len(series_arr) > 0 else 0
+            full_hist_preds = np.pad(hist_preds, (len(series_arr) - len(hist_preds), 0), constant_values=pad_val)
+            residuals = series_arr - full_hist_preds
+            
+            preds = []
+            curr_seq = scaled[-seq_length:].copy()
+            for _ in range(horizon):
+                inp = torch.tensor(curr_seq, dtype=torch.float32).view(1, seq_length, 1)
+                p = model(inp).item()
+                preds.append(p)
+                curr_seq = np.append(curr_seq[1:], p)
+                
+        preds_unscaled = np.array(preds) * denom + series_min
+        return np.maximum(0, preds_unscaled), residuals
+
+    @st.cache_data(ttl=600, show_spinner=False)
+    def run_lstm_forecast(series, horizon): return run_dl_model(series, horizon, "LSTM", 1, False)
+        
+    @st.cache_data(ttl=600, show_spinner=False)
+    def run_deep_lstm_forecast(series, horizon): return run_dl_model(series, horizon, "LSTM", 2, False)
+        
+    @st.cache_data(ttl=600, show_spinner=False)
+    def run_bilstm_forecast(series, horizon): return run_dl_model(series, horizon, "LSTM", 1, True)
+        
+    @st.cache_data(ttl=600, show_spinner=False)
+    def run_gru_forecast(series, horizon): return run_dl_model(series, horizon, "GRU", 1, False)
+        
+    @st.cache_data(ttl=600, show_spinner=False)
+    def run_bigru_forecast(series, horizon): return run_dl_model(series, horizon, "GRU", 1, True)
+
+
 def compute_metrics(actual, predicted):
     """Compute RMSE, MAE, MAPE."""
     actual, predicted = np.array(actual), np.array(predicted)
@@ -167,6 +260,15 @@ model_runners = {
     "Auto-Regressive": run_ar_forecast,
 }
 
+if "TORCH_AVAILABLE" in globals() and TORCH_AVAILABLE:
+    model_runners.update({
+        "LSTM (Standard)": run_lstm_forecast,
+        "Stacked LSTM (Deep)": run_deep_lstm_forecast,
+        "Bidirectional LSTM": run_bilstm_forecast,
+        "GRU (Standard)": run_gru_forecast,
+        "Bidirectional GRU": run_bigru_forecast,
+    })
+
 benchmark_results = {}
 for model_name, runner in model_runners.items():
     try:
@@ -186,9 +288,10 @@ st.markdown(f'<p class="section-subtitle">80/20 train-test split on current data
 metrics_df = pd.DataFrame(benchmark_results).T.reset_index().rename(columns={"index": "Model"})
 best_model_name = metrics_df.loc[metrics_df["RMSE"].idxmin(), "Model"]
 
-model_cols_ui = st.columns(len(metrics_df))
+model_cols_ui = st.columns(4)
 for i, row in metrics_df.iterrows():
-    with model_cols_ui[i]:
+    ui_col = model_cols_ui[i % 4]
+    with ui_col:
         is_best = row["Model"] == best_model_name
         badge = " 🏆" if is_best else ""
         kpi_card(
@@ -197,7 +300,6 @@ for i, row in metrics_df.iterrows():
             f"MAE: {row['MAE']:.2f} · MAPE: {row['MAPE']:.1f}%",
             is_best, "🤖"
         )
-
 # Comparison chart
 fig_comp = go.Figure()
 fig_comp.add_trace(go.Bar(name="RMSE", x=metrics_df["Model"], y=metrics_df["RMSE"],
