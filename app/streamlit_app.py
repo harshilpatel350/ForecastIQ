@@ -599,6 +599,7 @@ def _normalize_uploaded_df(df: pd.DataFrame) -> pd.DataFrame:
     # Ensure 'date' column exists as normalized timestamp
     if "datetime" in df.columns:
         df["date"] = df["datetime"].dt.normalize()
+        # Ensure extraction of time features for custom data
         if "hour" not in df.columns:
             df["hour"] = df["datetime"].dt.hour
         if "weekday" not in df.columns:
@@ -609,6 +610,20 @@ def _normalize_uploaded_df(df: pd.DataFrame) -> pd.DataFrame:
             df["year"] = df["datetime"].dt.year
         if "day_of_year" not in df.columns:
             df["day_of_year"] = df["datetime"].dt.day_of_year
+
+    # --- 🧪 NEW: Aggressive Numeric Detection ---
+    # Try to convert object columns to numeric if they look like numbers
+    for col in df.columns:
+        if df[col].dtype == "object" and col not in ["date", "datetime", "order_id"]:
+            # Try numeric conversion (ignoring commas/spaces)
+            try:
+                # Replace non-numeric chars except digits and decimals
+                cleaned = df[col].astype(str).str.replace(r'[^\d\.-]', '', regex=True)
+                numeric_series = pd.to_numeric(cleaned, errors="coerce")
+                if numeric_series.notna().sum() > len(df) * 0.5: # >50% numeric
+                    df[col] = numeric_series
+            except:
+                pass
 
     # Generate a synthetic order_id if missing
     if "order_id" not in df.columns:

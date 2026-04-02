@@ -56,10 +56,10 @@ if len(cat_cols) > 0 and len(num_cols) > 0:
             kpi_card("Records", f"{len(drill_data):,}", icon="📦")
         with kc3:
             if "rating" in cols:
-                kpi_card("Avg Rating", f"{city_data['rating'].mean():.2f}", icon="⭐")
+                kpi_card("Avg Rating", f"{drill_data['rating'].mean():.2f}", icon="⭐")
         with kc4:
             if "cancellation_flag" in cols:
-                kpi_card("Cancel Rate", f"{city_data['cancellation_flag'].mean()*100:.1f}%", icon="🚫")
+                kpi_card("Cancel Rate", f"{drill_data['cancellation_flag'].mean()*100:.1f}%", icon="🚫")
         st.markdown("")
 
         col1, col2 = st.columns(2)
